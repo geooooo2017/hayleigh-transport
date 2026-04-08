@@ -10,6 +10,9 @@ type AuthContextValue = {
 
 const AuthContext = createContext<AuthContextValue | null>(null);
 
+/** One shared password for all staff accounts until you change it in code or add a real backend. */
+export const STAFF_INITIAL_PASSWORD = "hayleigh2026";
+
 const accounts: Record<
   string,
   {
@@ -17,32 +20,32 @@ const accounts: Record<
     user: User;
   }
 > = {
-  "keir@transportops.com": {
-    password: "keir123",
+  "keir@hayleigh.uk": {
+    password: STAFF_INITIAL_PASSWORD,
     user: {
       id: "keir",
       name: "Keir",
-      email: "keir@transportops.com",
+      email: "keir@hayleigh.uk",
       domesticRef: "DT",
       internationalRef: "TT",
     },
   },
-  "scott@transportops.com": {
-    password: "scott123",
+  "scott@hayleigh.uk": {
+    password: STAFF_INITIAL_PASSWORD,
     user: {
       id: "scott",
       name: "Scott",
-      email: "scott@transportops.com",
+      email: "scott@hayleigh.uk",
       domesticRef: "DSO",
       internationalRef: "TSO",
     },
   },
-  "nik@transportops.com": {
-    password: "nik123",
+  "nik@hayleigh.uk": {
+    password: STAFF_INITIAL_PASSWORD,
     user: {
       id: "nik",
       name: "Nik",
-      email: "nik@transportops.com",
+      email: "nik@hayleigh.uk",
       domesticRef: "DO",
       internationalRef: "TO",
     },

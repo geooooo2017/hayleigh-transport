@@ -23,7 +23,7 @@ export default function FinanceCalculatorPage() {
     <div className="mx-auto max-w-3xl space-y-6">
       <div>
         <h1 className="flex items-center gap-2 text-2xl font-semibold text-gray-900 lg:text-3xl">
-          <Calculator className="text-[#2563EB]" />
+          <Calculator className="text-ht-slate" />
           Finance Calculator
         </h1>
         <p className="mt-1 text-gray-500">Quick transport cost and sell-price modelling (ex VAT)</p>

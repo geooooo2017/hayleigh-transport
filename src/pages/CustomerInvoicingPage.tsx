@@ -1,12 +1,12 @@
 import { useMemo } from "react";
 import { toast } from "sonner";
-import { AlertTriangle, Mail, Send } from "lucide-react";
-import { useLocalStorage } from "../hooks/useLocalStorage";
-import type { Job } from "../types";
+import { AlertTriangle, Mail, Printer, Send } from "lucide-react";
+import { useJobs } from "../context/JobsContext";
 import { Btn, Card } from "../components/Layout";
+import { escapeHtml, printPaperwork } from "../lib/printPaperwork";
 
 export default function CustomerInvoicingPage() {
-  const [jobs] = useLocalStorage<Job[]>("jobs", []);
+  const [jobs] = useJobs();
   const pending = useMemo(
     () => jobs.filter((j) => j.invoiceSent !== "yes" && j.status === "completed"),
     [jobs]
@@ -45,6 +45,36 @@ export default function CustomerInvoicingPage() {
                 onClick={() => toast.success("Emails queued", { description: "Draft invoices emailed (demo)." })}
               >
                 <Mail size={14} /> Send All Draft Invoices
+              </Btn>
+              <Btn
+                variant="outline"
+                className="gap-2"
+                onClick={() => {
+                  const rowHtml = jobs
+                    .slice(0, 50)
+                    .map(
+                      (j) =>
+                        `<tr><td>${escapeHtml(j.jobNumber)}</td><td>${escapeHtml(j.customerName)}</td><td>£${Number(j.sellPrice).toFixed(2)}</td><td>${j.invoiceSent === "yes" ? "Sent" : "Draft"}</td></tr>`
+                    )
+                    .join("");
+                  const ok = printPaperwork({
+                    title: "Customer invoicing — job listing",
+                    contentHtml: `
+                      <table style="width:100%;border-collapse:collapse;font-size:13px">
+                        <thead><tr>
+                          <th style="border:1px solid #e5e7eb;padding:8px;text-align:left;background:#f9fafb">Job</th>
+                          <th style="border:1px solid #e5e7eb;padding:8px;text-align:left;background:#f9fafb">Customer</th>
+                          <th style="border:1px solid #e5e7eb;padding:8px;text-align:left;background:#f9fafb">Amount (ex VAT)</th>
+                          <th style="border:1px solid #e5e7eb;padding:8px;text-align:left;background:#f9fafb">Invoice</th>
+                        </tr></thead>
+                        <tbody>${rowHtml || `<tr><td colspan="4" style="border:1px solid #e5e7eb;padding:12px">No jobs</td></tr>`}</tbody>
+                      </table>`,
+                  });
+                  if (ok) toast.success("Opening print preview", { description: "Use print to save as PDF." });
+                  else toast.error("Pop-up blocked", { description: "Allow pop-ups for this site to print." });
+                }}
+              >
+                <Printer size={14} /> Print listing
               </Btn>
             </div>
           </div>

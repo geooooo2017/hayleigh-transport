@@ -1,0 +1,23 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 300 200" fill="none" aria-hidden="true">
+  <rect x="1" y="1" width="298" height="198" fill="#fff" stroke="#000" stroke-width="2" rx="6" />
+  <rect x="10" y="10" width="280" height="98" fill="#000" />
+  <text
+    x="150"
+    y="84"
+    text-anchor="middle"
+    fill="#fff"
+    font-family="Arial Black, Helvetica Neue, Helvetica, system-ui, sans-serif"
+    font-size="64"
+    font-weight="900"
+  >HT</text>
+  <text
+    x="150"
+    y="172"
+    text-anchor="middle"
+    fill="#000"
+    font-family="Inter, Helvetica Neue, Helvetica, system-ui, sans-serif"
+    font-size="12.5"
+    font-weight="600"
+    letter-spacing="0.42em"
+  >HAYLEIGH TRANSPORT</text>
+</svg>

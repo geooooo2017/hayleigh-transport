@@ -147,7 +147,7 @@ export default function CustomersPage() {
                   <td className="px-4 py-3">{c.email}</td>
                   <td className="px-4 py-3">{c.status}</td>
                   <td className="px-4 py-3 text-right">
-                    <button type="button" className="mr-2 text-[#2563EB] hover:underline" onClick={() => openEdit(c)}>
+                    <button type="button" className="mr-2 font-medium text-ht-slate hover:underline" onClick={() => openEdit(c)}>
                       Edit
                     </button>
                     <button type="button" className="text-red-600" onClick={() => remove(c)}>

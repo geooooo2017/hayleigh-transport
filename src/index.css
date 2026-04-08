@@ -1,6 +1,22 @@
 @import "tailwindcss";
 
+/* Hayleigh Transport — haulage & logistics brand palette (used sitewide) */
+@theme {
+  --color-ht-navy: #0a1628;
+  --color-ht-navy-mid: #101b2e;
+  --color-ht-slate: #1e3a5f;
+  --color-ht-slate-dark: #152a45;
+  --color-ht-canvas: #eef1f5;
+  --color-ht-border: #d4d9e0;
+  --color-ht-amber: #d97706;
+  --color-ht-amber-dark: #b45309;
+}
+
 body {
   margin: 0;
   font-family: Inter, system-ui, sans-serif;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  background-color: var(--color-ht-canvas);
+  color: #0f172a;
 }

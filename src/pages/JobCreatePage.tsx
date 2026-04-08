@@ -3,15 +3,17 @@ import { Link, useNavigate } from "react-router-dom";
 import { toast } from "sonner";
 import { ArrowLeft } from "lucide-react";
 import { useAuth } from "../context/AuthContext";
-import { useLocalStorage } from "../hooks/useLocalStorage";
+import { useJobs } from "../context/JobsContext";
+import { downloadBothBookingPdfs } from "../lib/jobBookingPdf";
 import { allocateJobNumber, previewJobNumber } from "../lib/jobNumbers";
 import type { Job } from "../types";
 import { Btn, Card } from "../components/Layout";
+import { platformPath } from "../routes/paths";
 
 export default function JobCreatePage() {
   const navigate = useNavigate();
   const { user } = useAuth();
-  const [, setJobs] = useLocalStorage<Job[]>("jobs", []);
+  const [, setJobs] = useJobs();
 
   const [routeType, setRouteType] = useState<"domestic" | "international">("domestic");
   const [collectionDate, setCollectionDate] = useState("");
@@ -46,7 +48,7 @@ export default function JobCreatePage() {
   const marginClass =
     margin < 0 ? "text-red-600" : margin < 15 ? "text-orange-600" : margin < 25 ? "text-yellow-600" : "text-green-600";
 
-  const onSubmit = (e: React.FormEvent) => {
+  const onSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!user) return;
     const jobNumber = allocateJobNumber(user, routeType);
@@ -78,13 +80,19 @@ export default function JobCreatePage() {
     };
     setJobs((prev) => [...prev, job]);
     toast.success(`Job ${jobNumber} created successfully!`);
-    navigate("/jobs");
+    try {
+      await downloadBothBookingPdfs(job);
+      toast.success("Booking PDFs saved", { description: "Customer confirmation and supplier instruction." });
+    } catch {
+      toast.message("PDF download skipped", { description: "Open the job to generate booking PDFs." });
+    }
+    navigate(platformPath("/jobs"));
   };
 
   return (
     <div className="mx-auto max-w-6xl space-y-4 lg:space-y-6">
       <div className="flex items-center gap-4">
-        <Link to="/jobs">
+        <Link to={platformPath("/jobs")}>
           <Btn variant="outline" className="gap-2 py-1.5 text-sm">
             <ArrowLeft size={16} /> Back
           </Btn>
@@ -96,11 +104,11 @@ export default function JobCreatePage() {
       </div>
 
       <form onSubmit={onSubmit} className="space-y-6">
-        <Card className="border-blue-200 bg-blue-50 p-6">
+        <Card className="border-ht-border bg-ht-canvas p-6">
           <div className="flex flex-wrap items-center justify-between gap-4">
             <div>
               <div className="mb-1 text-sm text-gray-600">Job Number (Auto-generated)</div>
-              <div className="text-3xl font-semibold text-[#2563EB]">{preview || "—"}</div>
+              <div className="text-3xl font-semibold text-ht-slate">{preview || "—"}</div>
             </div>
             <div className="text-right">
               <div className="mb-1 text-sm text-gray-600">Handler</div>
@@ -336,7 +344,7 @@ export default function JobCreatePage() {
 
         <div className="flex gap-3">
           <Btn type="submit">Create Job</Btn>
-          <Link to="/jobs">
+          <Link to={platformPath("/jobs")}>
             <Btn type="button" variant="outline">
               Cancel
             </Btn>

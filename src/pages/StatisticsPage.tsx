@@ -1,10 +1,9 @@
 import { useMemo } from "react";
-import { useLocalStorage } from "../hooks/useLocalStorage";
-import type { Job } from "../types";
+import { useJobs } from "../context/JobsContext";
 import { Card } from "../components/Layout";
 
 export default function StatisticsPage() {
-  const [jobs] = useLocalStorage<Job[]>("jobs", []);
+  const [jobs] = useJobs();
 
   const byCustomer = useMemo(() => {
     const m = new Map<string, number>();
@@ -34,7 +33,7 @@ export default function StatisticsPage() {
         </Card>
         <Card className="p-6">
           <div className="text-sm text-gray-600">Total sell (ex VAT)</div>
-          <div className="text-3xl font-bold text-[#2563EB]">
+          <div className="text-3xl font-bold text-ht-slate">
             £{jobs.reduce((s, j) => s + (Number(j.sellPrice) || 0), 0).toFixed(0)}
           </div>
         </Card>
@@ -54,7 +53,7 @@ export default function StatisticsPage() {
                 </div>
                 <div className="h-2 overflow-hidden rounded-full bg-gray-100">
                   <div
-                    className="h-full rounded-full bg-[#2563EB] transition-all"
+                    className="h-full rounded-full bg-ht-slate transition-all"
                     style={{ width: `${(count / maxBar) * 100}%` }}
                   />
                 </div>

@@ -2,6 +2,7 @@ import { useState } from "react";
 import { toast } from "sonner";
 import { FileBarChart } from "lucide-react";
 import { Btn, Card } from "../components/Layout";
+import { escapeHtml, printPaperwork } from "../lib/printPaperwork";
 
 export default function MonthlyReportPage() {
   const [month, setMonth] = useState(() => new Date().toISOString().slice(0, 7));
@@ -11,7 +12,7 @@ export default function MonthlyReportPage() {
     <div className="mx-auto max-w-3xl space-y-6">
       <div>
         <h1 className="flex items-center gap-2 text-2xl font-semibold text-gray-900 lg:text-3xl">
-          <FileBarChart className="text-[#2563EB]" />
+          <FileBarChart className="text-ht-slate" />
           Monthly Report
         </h1>
         <p className="mt-1 text-gray-500">Compile a management summary for any month</p>
@@ -38,13 +39,20 @@ export default function MonthlyReportPage() {
           />
         </div>
         <Btn
-          onClick={() =>
-            toast.success("Report generated", {
-              description: `Monthly pack for ${month} saved to downloads (demo).`,
-            })
-          }
+          onClick={() => {
+            const ok = printPaperwork({
+              title: `Monthly report — ${month}`,
+              contentHtml: `
+                <p style="margin:0 0 12px;font-size:14px;color:#374151"><strong>Report month:</strong> ${escapeHtml(month)}</p>
+                <p style="margin:0 0 8px;font-size:13px;font-weight:600">Notes / highlights</p>
+                <div style="white-space:pre-wrap;font-size:13px;line-height:1.5;border:1px solid #e5e7eb;border-radius:8px;padding:12px">${notes.trim() ? escapeHtml(notes) : "—"}</div>
+              `,
+            });
+            if (ok) toast.success("Opening print preview", { description: "Use your browser print dialog to save as PDF." });
+            else toast.error("Pop-up blocked", { description: "Allow pop-ups for this site to print the report." });
+          }}
         >
-          Generate PDF (demo)
+          Print / Save as PDF
         </Btn>
       </Card>
     </div>

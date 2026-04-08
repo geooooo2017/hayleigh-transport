@@ -12,8 +12,10 @@ import type { ReactNode } from "react";
 import { Link } from "react-router-dom";
 import { ClipboardList, Plus } from "lucide-react";
 import { useLocalStorage } from "../hooks/useLocalStorage";
+import { useJobs } from "../context/JobsContext";
 import type { Job } from "../types";
 import { Btn, Card } from "../components/Layout";
+import { platformPath } from "../routes/paths";
 
 const WEEKDAYS = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday"] as const;
 
@@ -33,14 +35,14 @@ function JobCard({ job, fromBasket }: { job: Job; fromBasket?: boolean }) {
       {...listeners}
       {...attributes}
       className={`cursor-grab rounded-lg border border-gray-200 bg-white p-3 shadow-sm active:cursor-grabbing ${
-        isDragging ? "opacity-70 ring-2 ring-[#2563EB]" : ""
+        isDragging ? "opacity-70 ring-2 ring-ht-slate" : ""
       } ${fromBasket ? "border-dashed" : ""}`}
     >
       <div className="text-sm font-semibold text-gray-900">{job.jobNumber}</div>
       <div className="text-xs text-gray-600">{job.customerName}</div>
       <div className="mt-2 line-clamp-2 text-xs text-gray-500">{job.collectionLocation}</div>
       <div className="text-xs text-gray-500">→ {job.deliveryLocation}</div>
-      <div className="mt-2 text-xs font-medium text-[#2563EB]">£{Number(job.sellPrice).toFixed(2)}</div>
+      <div className="mt-2 text-xs font-medium text-ht-slate">£{Number(job.sellPrice).toFixed(2)}</div>
     </div>
   );
 }
@@ -53,7 +55,7 @@ function DropColumn({ id, title, jobs }: { id: string; title: string; jobs: Job[
       <div
         ref={setNodeRef}
         className={`min-h-[400px] flex-1 space-y-3 rounded-b-lg border-2 border-dashed p-3 lg:min-h-[500px] ${
-          isOver ? "border-[#2563EB] bg-blue-50" : "border-gray-200 bg-gray-50"
+          isOver ? "border-ht-slate bg-ht-slate/5" : "border-ht-border bg-ht-canvas"
         }`}
       >
         {jobs.length === 0 ? (
@@ -71,7 +73,7 @@ function BasketDropZone({ children, className }: { children: ReactNode; classNam
   return (
     <div
       ref={setNodeRef}
-      className={`${className ?? ""} ${isOver ? "ring-2 ring-[#2563EB] ring-offset-2" : ""}`}
+      className={`${className ?? ""} ${isOver ? "ring-2 ring-ht-slate ring-offset-2" : ""}`}
     >
       {children}
     </div>
@@ -79,7 +81,7 @@ function BasketDropZone({ children, className }: { children: ReactNode; classNam
 }
 
 export default function JobBoardPage() {
-  const [jobs, setJobs] = useLocalStorage<Job[]>("jobs", []);
+  const [jobs, setJobs] = useJobs();
   const [drivers] = useLocalStorage("drivers", [] as { id: number; name: string }[]);
   const [vehicles] = useLocalStorage("vehicles", [] as { id: number; name: string; registration: string }[]);
 
@@ -124,7 +126,7 @@ export default function JobBoardPage() {
             <ClipboardList size={48} className="mx-auto mb-4 text-gray-300" />
             <h3 className="mb-2 text-lg font-semibold text-gray-900">No Jobs Yet</h3>
             <p className="mb-4 text-gray-600">Create your first job to see it on the board.</p>
-            <Link to="/jobs/create">
+            <Link to={platformPath("/jobs/create")}>
               <Btn className="gap-2">
                 <Plus size={16} /> Create Job
               </Btn>
@@ -194,7 +196,7 @@ export default function JobBoardPage() {
                       key={t}
                       type="button"
                       className={`rounded-lg px-4 py-2 text-sm font-medium ${
-                        i === 1 ? "bg-[#2563EB] text-white" : "text-gray-600 hover:bg-gray-100"
+                        i === 1 ? "bg-ht-slate text-white" : "text-slate-600 hover:bg-ht-canvas"
                       }`}
                     >
                       {t}

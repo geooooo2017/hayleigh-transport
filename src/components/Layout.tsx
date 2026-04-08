@@ -19,21 +19,24 @@ import {
   Wallet,
   X,
 } from "lucide-react";
+import { CompanyLogo } from "./CompanyLogo";
 import { useAuth } from "../context/AuthContext";
+import { useJobsSync } from "../context/JobsContext";
+import { PLATFORM_BASE, platformPath } from "../routes/paths";
 
 const nav = [
-  { name: "Dashboard", path: "/", icon: LayoutDashboard },
-  { name: "Job Board", path: "/job-board", icon: ClipboardList },
-  { name: "Jobs", path: "/jobs", icon: Truck },
-  { name: "Live Tracking", path: "/live-tracking", icon: MapPin },
-  { name: "Finance Calculator", path: "/finance-calculator", icon: Calculator },
-  { name: "Financial Tracking", path: "/financial-tracking", icon: Wallet },
-  { name: "Customer Invoicing", path: "/customer-invoicing", icon: Receipt },
-  { name: "Customers", path: "/customers", icon: Users },
-  { name: "Drivers & Vehicles", path: "/drivers-vehicles", icon: Truck },
-  { name: "Statistics Centre", path: "/statistics", icon: BarChart3 },
-  { name: "Monthly Report", path: "/monthly-report", icon: FileBarChart },
-  { name: "Settings", path: "/settings", icon: Settings },
+  { name: "Dashboard", path: PLATFORM_BASE, icon: LayoutDashboard },
+  { name: "Job Board", path: platformPath("/job-board"), icon: ClipboardList },
+  { name: "Jobs", path: platformPath("/jobs"), icon: Truck },
+  { name: "Live Tracking", path: platformPath("/live-tracking"), icon: MapPin },
+  { name: "Finance Calculator", path: platformPath("/finance-calculator"), icon: Calculator },
+  { name: "Financial Tracking", path: platformPath("/financial-tracking"), icon: Wallet },
+  { name: "Customer Invoicing", path: platformPath("/customer-invoicing"), icon: Receipt },
+  { name: "Customers", path: platformPath("/customers"), icon: Users },
+  { name: "Drivers & Vehicles", path: platformPath("/drivers-vehicles"), icon: Truck },
+  { name: "Statistics Centre", path: platformPath("/statistics"), icon: BarChart3 },
+  { name: "Monthly Report", path: platformPath("/monthly-report"), icon: FileBarChart },
+  { name: "Settings", path: platformPath("/settings"), icon: Settings },
 ];
 
 function initials(name: string) {
@@ -48,16 +51,17 @@ function initials(name: string) {
 export function Layout() {
   const [open, setOpen] = useState(false);
   const { user, logout } = useAuth();
+  const { syncMode, cloudLoading, cloudError } = useJobsSync();
   const navigate = useNavigate();
 
   const doLogout = () => {
     logout();
-    navigate("/login");
+    navigate("/");
     setOpen(false);
   };
 
   return (
-    <div className="min-h-screen bg-[#F8FAFC]" style={{ fontFamily: "Inter, sans-serif" }}>
+    <div className="min-h-screen bg-ht-canvas" style={{ fontFamily: "Inter, sans-serif" }}>
       {open && (
         <button
           type="button"
@@ -67,7 +71,7 @@ export function Layout() {
         />
       )}
       <aside
-        className={`fixed left-0 top-0 z-50 flex h-screen w-64 flex-col border-r border-gray-200 bg-white transition-transform duration-300 lg:translate-x-0 ${
+        className={`fixed left-0 top-0 z-50 flex h-screen w-64 flex-col border-r border-ht-border border-l-4 border-l-ht-amber bg-white transition-transform duration-300 lg:translate-x-0 ${
           open ? "translate-x-0" : "-translate-x-full"
         }`}
       >
@@ -79,14 +83,17 @@ export function Layout() {
           <X size={20} />
         </button>
         <div className="flex-1 overflow-y-auto p-6">
-          <div className="mb-8 flex items-center gap-2">
-            <div className="h-8 w-8 rounded-lg bg-[#2563EB]" />
-            <span className="text-lg font-semibold">Hayleigh Transport</span>
-          </div>
+          <Link
+            to="/"
+            className="mb-8 flex items-center gap-3 rounded-lg outline-none ring-offset-2 hover:opacity-90 focus-visible:ring-2 focus-visible:ring-ht-slate"
+          >
+            <CompanyLogo className="h-10 w-auto max-w-[140px] shrink-0 object-contain object-left" />
+            <span className="sr-only">Hayleigh Transport</span>
+          </Link>
           {user && (
-            <div className="mb-6 rounded-lg bg-blue-50 p-3">
+            <div className="mb-6 rounded-lg border border-ht-border bg-ht-canvas p-3">
               <div className="mb-2 flex items-center gap-2">
-                <Truck size={16} className="text-[#2563EB]" />
+                <Truck size={16} className="text-ht-slate" />
                 <span className="text-sm font-semibold text-gray-900">{user.name}</span>
               </div>
               <div className="text-xs text-gray-600">
@@ -106,11 +113,11 @@ export function Layout() {
                 <NavLink
                   key={item.path}
                   to={item.path}
-                  end={item.path === "/"}
+                  end={item.path === PLATFORM_BASE}
                   onClick={() => setOpen(false)}
                   className={({ isActive }) =>
                     `flex items-center gap-3 rounded-lg px-4 py-3 text-sm font-medium transition-colors ${
-                      isActive ? "bg-[#2563EB] text-white" : "text-gray-700 hover:bg-gray-100"
+                      isActive ? "bg-ht-slate text-white" : "text-slate-700 hover:bg-ht-canvas"
                     }`
                   }
                 >
@@ -121,7 +128,7 @@ export function Layout() {
             })}
           </nav>
         </div>
-        <div className="border-t border-gray-200 p-4">
+        <div className="border-t border-ht-border p-4">
           <Link
             to="/login"
             onClick={doLogout}
@@ -133,7 +140,7 @@ export function Layout() {
         </div>
       </aside>
 
-      <header className="fixed left-0 right-0 top-0 z-10 h-16 border-b border-gray-200 bg-white lg:left-64">
+      <header className="fixed left-0 right-0 top-0 z-10 h-16 border-b border-ht-border bg-white lg:left-64">
         <div className="flex h-full items-center justify-between px-4 lg:px-6">
           <button
             type="button"
@@ -147,7 +154,7 @@ export function Layout() {
             <input
               type="search"
               placeholder="Search jobs, customers, drivers..."
-              className="h-10 w-full rounded-lg border border-gray-200 bg-gray-50 py-2 pl-10 pr-4 text-sm outline-none focus:ring-2 focus:ring-blue-500/30"
+              className="h-10 w-full rounded-lg border border-ht-border bg-ht-canvas py-2 pl-10 pr-4 text-sm outline-none focus:ring-2 focus:ring-ht-slate/20"
             />
           </div>
           <div className="ml-auto flex items-center gap-2 lg:gap-4">
@@ -162,14 +169,14 @@ export function Layout() {
                   {user?.domesticRef}/{user?.internationalRef}
                 </div>
               </div>
-              <div className="flex h-10 w-10 items-center justify-center rounded-full bg-[#2563EB] text-sm font-semibold text-white">
+              <div className="flex h-10 w-10 items-center justify-center rounded-full bg-ht-slate text-sm font-semibold text-white">
                 {user ? initials(user.name) : "?"}
               </div>
             </div>
             <button
               type="button"
               onClick={doLogout}
-              className="flex items-center gap-2 rounded-lg border border-gray-200 px-3 py-1.5 text-sm hover:bg-gray-50"
+              className="flex items-center gap-2 rounded-lg border border-ht-border px-3 py-1.5 text-sm hover:bg-ht-canvas"
             >
               <LogOut size={16} />
               <span className="hidden sm:inline">Logout</span>
@@ -178,7 +185,27 @@ export function Layout() {
         </div>
       </header>
 
-      <main className="min-h-screen pt-16 lg:ml-64">
+      {syncMode === "cloud" && (
+        <div
+          className={`fixed left-0 right-0 top-16 z-[5] border-b px-4 py-2 text-center text-xs lg:left-64 ${
+            cloudError
+              ? "border-red-200 bg-red-50 text-red-800"
+              : cloudLoading
+                ? "border-amber-200 bg-amber-50 text-amber-900"
+                : "border-emerald-200 bg-emerald-50 text-emerald-900"
+          }`}
+        >
+          {cloudError
+            ? `Could not sync jobs: ${cloudError}`
+            : cloudLoading
+              ? "Loading shared jobs…"
+              : "Jobs are stored in the cloud — everyone on your team sees the same list. Changes from others appear within a few seconds."}
+        </div>
+      )}
+
+      <main
+        className={`min-h-screen lg:ml-64 ${syncMode === "cloud" ? "pt-[7rem]" : "pt-16"}`}
+      >
         <div className="p-4 lg:p-6">
           <Outlet />
         </div>
@@ -194,7 +221,7 @@ export function Card({
   className?: string;
   children: ReactNode;
 }) {
-  return <div className={`rounded-xl border border-gray-200 bg-white shadow-sm ${className}`}>{children}</div>;
+  return <div className={`rounded-xl border border-ht-border bg-white shadow-sm ${className}`}>{children}</div>;
 }
 
 export function Btn({
@@ -207,8 +234,8 @@ export function Btn({
     "inline-flex items-center justify-center gap-2 rounded-lg px-4 py-2 text-sm font-medium transition-colors disabled:opacity-50";
   const styles =
     variant === "primary"
-      ? "bg-[#2563EB] text-white hover:bg-[#1e40af]"
-      : "border border-gray-200 bg-white hover:bg-gray-50";
+      ? "bg-ht-slate text-white hover:bg-ht-slate-dark"
+      : "border border-ht-border bg-white hover:bg-ht-canvas";
   return <button type={type} className={`${base} ${styles} ${className}`} {...rest} />;
 }
 

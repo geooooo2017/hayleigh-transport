@@ -1,10 +1,33 @@
 import { useEffect, useState } from "react";
-import { useNavigate } from "react-router-dom";
-import { AlertCircle, Truck } from "lucide-react";
+import { Link, useLocation, useNavigate } from "react-router-dom";
+import { AlertCircle, Calculator, Home, Info, Mail } from "lucide-react";
+import { CompanyLogo } from "../components/CompanyLogo";
 import { useAuth } from "../context/AuthContext";
+import { PLATFORM_BASE } from "../routes/paths";
+
+const publicNav = [
+  { to: "/", label: "Home", Icon: Home },
+  { to: "/about", label: "About", Icon: Info },
+  { to: "/contact", label: "Contact", Icon: Mail },
+  { to: "/quote", label: "Get a quote", Icon: Calculator },
+] as const;
+
+const publicDestinations = [
+  { to: "/", title: "Company website", subtitle: "Services, overview and how we work", Icon: Home },
+  { to: "/about", title: "About us", subtitle: "Our approach and capabilities", Icon: Info },
+  { to: "/contact", title: "Contact", subtitle: "Email, phone and enquiries", Icon: Mail },
+  { to: "/quote", title: "Request a quote", subtitle: "Public quote wizard", Icon: Calculator },
+] as const;
+
+function destinationAfterAuth(location: ReturnType<typeof useLocation>) {
+  const from = (location.state as { from?: { pathname?: string } } | null)?.from?.pathname;
+  if (from && from.startsWith("/platform")) return from;
+  return PLATFORM_BASE;
+}
 
 export default function LoginPage() {
   const navigate = useNavigate();
+  const location = useLocation();
   const { login, user } = useAuth();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -12,32 +35,57 @@ export default function LoginPage() {
   const [selectedQuick, setSelectedQuick] = useState<string | null>(null);
 
   useEffect(() => {
-    if (user) navigate("/", { replace: true });
-  }, [user, navigate]);
+    if (user) navigate(destinationAfterAuth(location), { replace: true });
+  }, [user, navigate, location]);
 
-  const quickFill = (em: string, pw: string, name: string) => {
+  const quickFill = (em: string, name: string) => {
     setEmail(em);
-    setPassword(pw);
+    setPassword("");
     setSelectedQuick(name);
   };
 
   const onSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     setError("");
-    if (login(email, password)) navigate("/");
+    if (login(email, password)) navigate(destinationAfterAuth(location), { replace: true });
     else setError("Invalid email or password. Please try again.");
   };
 
   return (
     <div
-      className="flex min-h-screen items-center justify-center bg-gradient-to-br from-[#2563EB] to-[#1e40af] p-4"
+      className="relative flex min-h-screen flex-col bg-gradient-to-br from-ht-navy via-ht-navy-mid to-ht-slate"
       style={{ fontFamily: "Inter, sans-serif" }}
     >
-      <div className="w-full max-w-md">
-        <div className="rounded-2xl bg-white p-6 shadow-xl lg:p-8">
+      <header className="sticky top-0 z-10 border-b border-white/10 bg-ht-navy/90 shadow-sm backdrop-blur-md">
+        <div className="mx-auto flex max-w-5xl flex-wrap items-center justify-between gap-3 px-4 py-3 sm:px-6">
+          <Link
+            to="/"
+            className="flex items-center gap-2 rounded-lg text-white outline-none ring-offset-2 ring-offset-ht-navy hover:text-slate-200 focus-visible:ring-2 focus-visible:ring-ht-amber"
+          >
+            <CompanyLogo className="h-8 w-auto max-w-[120px] object-contain object-left" alt="Hayleigh Transport" />
+            <span className="hidden text-sm font-semibold tracking-tight sm:inline">Hayleigh Transport</span>
+          </Link>
+          <nav aria-label="Public website" className="flex flex-wrap items-center justify-end gap-1 sm:gap-2">
+            {publicNav.map(({ to, label, Icon }) => (
+              <Link
+                key={to}
+                to={to}
+                className="inline-flex items-center gap-1.5 rounded-lg px-2.5 py-2 text-xs font-medium text-white/95 ring-white/40 transition hover:bg-white/10 hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white sm:px-3 sm:text-sm"
+              >
+                <Icon className="h-4 w-4 shrink-0 opacity-90" aria-hidden />
+                {label}
+              </Link>
+            ))}
+          </nav>
+        </div>
+      </header>
+
+      <div className="flex flex-1 flex-col items-center justify-center px-4 py-8 sm:py-10">
+        <div className="flex w-full max-w-lg flex-col items-stretch">
+        <div className="mx-auto w-full max-w-md rounded-2xl bg-white p-6 shadow-xl lg:p-8">
           <div className="mb-6 flex flex-col items-center lg:mb-8">
-            <div className="mb-4 flex h-14 w-14 items-center justify-center rounded-2xl bg-[#2563EB] lg:h-16 lg:w-16">
-              <Truck size={28} className="text-white" />
+            <div className="mb-4 rounded-xl border border-gray-200 bg-white p-2 shadow-sm">
+              <CompanyLogo className="h-12 w-auto max-w-[200px] object-contain lg:h-14" />
             </div>
             <h1 className="text-center text-xl font-semibold text-gray-900 lg:text-2xl">
               Transport Operations Platform
@@ -47,25 +95,25 @@ export default function LoginPage() {
             </p>
           </div>
 
-          <div className="mb-6 rounded-lg border border-blue-200 bg-blue-50 p-3 lg:p-4">
-            <h3 className="mb-2 text-xs font-semibold text-blue-900 lg:text-sm">Quick Login</h3>
-            <p className="mb-3 text-xs text-blue-700">Select a user to auto-fill credentials:</p>
+          <div className="mb-6 rounded-lg border border-ht-border bg-ht-canvas p-3 lg:p-4">
+            <h3 className="mb-2 text-xs font-semibold text-ht-navy lg:text-sm">Quick login</h3>
+            <p className="mb-3 text-xs text-slate-600">Select a user to fill email.</p>
             <div className="grid grid-cols-3 gap-2">
               {(
                 [
-                  ["keir@transportops.com", "keir123", "Keir", "DT/TT"],
-                  ["scott@transportops.com", "scott123", "Scott", "DSO/TSO"],
-                  ["nik@transportops.com", "nik123", "Nik", "DO/TO"],
+                  ["keir@hayleigh.uk", "Keir", "DT/TT"],
+                  ["scott@hayleigh.uk", "Scott", "DSO/TSO"],
+                  ["nik@hayleigh.uk", "Nik", "DO/TO"],
                 ] as const
-              ).map(([em, pw, name, label]) => (
+              ).map(([em, name, label]) => (
                 <button
                   key={name}
                   type="button"
-                  onClick={() => quickFill(em, pw, name)}
+                  onClick={() => quickFill(em, name)}
                   className={`rounded-lg border py-2 px-3 text-xs font-medium transition-all ${
                     selectedQuick === name
-                      ? "border-[#2563EB] bg-[#2563EB] text-white"
-                      : "border-gray-200 bg-white text-gray-700 hover:bg-gray-50"
+                      ? "border-ht-slate bg-ht-slate text-white"
+                      : "border-ht-border bg-white text-slate-700 hover:bg-slate-50"
                   }`}
                 >
                   {name}
@@ -90,11 +138,13 @@ export default function LoginPage() {
               <input
                 id="email"
                 type="email"
+                name="email"
                 required
+                autoComplete="username"
                 placeholder="your.email@company.com"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
-                className="mt-1 w-full rounded-lg border border-gray-200 px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-blue-500/30"
+                className="mt-1 w-full rounded-lg border border-ht-border px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-ht-slate/25"
               />
             </div>
             <div>
@@ -104,29 +154,47 @@ export default function LoginPage() {
               <input
                 id="password"
                 type="password"
+                name="password"
                 required
+                autoComplete="current-password"
                 placeholder="Enter your password"
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
-                className="mt-1 w-full rounded-lg border border-gray-200 px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-blue-500/30"
+                className="mt-1 w-full rounded-lg border border-ht-border px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-ht-slate/25"
               />
             </div>
             <button
               type="submit"
-              className="w-full rounded-lg bg-[#2563EB] py-2.5 text-sm font-medium text-white hover:bg-[#1e40af]"
+              className="w-full rounded-lg bg-ht-slate py-2.5 text-sm font-medium text-white hover:bg-ht-slate-dark"
             >
               Login
             </button>
           </form>
         </div>
-        <p className="mt-6 text-center text-sm text-white">
-          Full demo access - Click any user above to login
-        </p>
-        <p className="mt-4 text-center text-sm text-blue-100">
-          <a href="/quote" className="underline hover:text-white">
-            Public: Get an instant quote
-          </a>
-        </p>
+
+        <div className="mt-8 w-full rounded-2xl border border-white/20 bg-white/10 p-4 shadow-lg backdrop-blur-md sm:p-5">
+          <p className="text-center text-xs font-semibold uppercase tracking-wider text-amber-400/90">Not logging in?</p>
+          <p className="mt-1 text-center text-sm text-white/90">Go to the public site or request a quote</p>
+          <ul className="mt-4 grid gap-2 sm:grid-cols-2">
+            {publicDestinations.map(({ to, title, subtitle, Icon }) => (
+              <li key={to}>
+                <Link
+                  to={to}
+                  className="flex items-start gap-3 rounded-xl border border-white/15 bg-white/5 p-3 text-left transition hover:border-white/30 hover:bg-white/15 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white"
+                >
+                  <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-white/15 text-white">
+                    <Icon className="h-4 w-4" aria-hidden />
+                  </span>
+                  <span className="min-w-0">
+                    <span className="block text-sm font-semibold text-white">{title}</span>
+                    <span className="mt-0.5 block text-xs leading-snug text-slate-300">{subtitle}</span>
+                  </span>
+                </Link>
+              </li>
+            ))}
+          </ul>
+        </div>
+        </div>
       </div>
     </div>
   );

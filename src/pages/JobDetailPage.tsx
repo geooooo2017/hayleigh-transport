@@ -3,6 +3,7 @@ import {
   ArrowLeft,
   Calendar,
   Clock,
+  FileDown,
   FileUp,
   MapPin,
   Package,
@@ -10,14 +11,17 @@ import {
   Truck,
   User,
 } from "lucide-react";
-import { useLocalStorage } from "../hooks/useLocalStorage";
+import { useJobs } from "../context/JobsContext";
+import { downloadCustomerBookingPdf, downloadSupplierBookingPdf } from "../lib/jobBookingPdf";
 import type { Job } from "../types";
+import { toast } from "sonner";
 import { Btn, Card } from "../components/Layout";
+import { platformPath } from "../routes/paths";
 
 function statusBadge(status: Job["status"]) {
   const map = {
     completed: "bg-green-100 text-green-700",
-    "in-progress": "bg-blue-100 text-blue-700",
+    "in-progress": "bg-ht-slate/12 text-ht-slate-dark",
     scheduled: "bg-orange-100 text-orange-700",
   } as const;
   const label =
@@ -29,14 +33,14 @@ function statusBadge(status: Job["status"]) {
 
 export default function JobDetailPage() {
   const { jobId } = useParams();
-  const [jobs] = useLocalStorage<Job[]>("jobs", []);
+  const [jobs] = useJobs();
   const id = Number(jobId);
   const job = jobs.find((j) => j.id === id);
 
   if (!job) {
     return (
       <div className="space-y-4">
-        <Link to="/jobs">
+        <Link to={platformPath("/jobs")}>
           <Btn variant="outline" className="gap-2">
             <ArrowLeft size={16} /> Back to Jobs
           </Btn>
@@ -51,7 +55,7 @@ export default function JobDetailPage() {
   return (
     <div className="space-y-6">
       <div className="flex items-center gap-4">
-        <Link to="/jobs">
+        <Link to={platformPath("/jobs")}>
           <Btn variant="outline" className="gap-2 text-sm">
             <ArrowLeft size={16} /> Back to Jobs
           </Btn>
@@ -65,11 +69,35 @@ export default function JobDetailPage() {
             {job.customerName} — {jobType}
           </p>
           {job.scheduledDay && (
-            <p className="mt-1 text-sm text-blue-600">Scheduled: {job.scheduledDay}</p>
+            <p className="mt-1 text-sm text-ht-slate">Scheduled: {job.scheduledDay}</p>
           )}
         </div>
-        <div className="flex items-center gap-3">
+        <div className="flex flex-wrap items-center gap-2 sm:gap-3">
           {statusBadge(job.status)}
+          <Btn
+            variant="outline"
+            className="gap-2"
+            type="button"
+            onClick={() =>
+              downloadCustomerBookingPdf(job).catch(() =>
+                toast.error("Could not build PDF", { description: "Try again or check that the logo loads." })
+              )
+            }
+          >
+            <FileDown size={16} /> Customer PDF
+          </Btn>
+          <Btn
+            variant="outline"
+            className="gap-2"
+            type="button"
+            onClick={() =>
+              downloadSupplierBookingPdf(job).catch(() =>
+                toast.error("Could not build PDF", { description: "Try again or check that the logo loads." })
+              )
+            }
+          >
+            <FileDown size={16} /> Supplier PDF
+          </Btn>
           <Btn className="gap-2" type="button" onClick={() => alert("Edit flow: update fields on Jobs list export / recreate job.")}>
             <Pencil size={16} /> Edit Job
           </Btn>

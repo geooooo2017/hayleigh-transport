@@ -2,7 +2,9 @@ import { useState } from "react";
 import { Link } from "react-router-dom";
 import { toast } from "sonner";
 import { Check, ChevronRight, Truck } from "lucide-react";
+import { CompanyLogo } from "../components/CompanyLogo";
 import { Btn, Card } from "../components/Layout";
+import { mailtoOffice, OFFICE_ENQUIRIES_EMAIL } from "../lib/companyBrand";
 
 type QuoteForm = {
   serviceType: string;
@@ -85,24 +87,32 @@ export default function QuotePage() {
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-purple-50">
-      <div className="bg-gradient-to-r from-[#2563EB] to-[#1e40af] py-16 text-white">
-        <div className="mx-auto max-w-6xl px-6 text-center">
-          <h1 className="mb-4 text-4xl font-bold md:text-5xl">Get an Instant Transport Quote</h1>
-          <p className="mb-8 text-xl text-blue-100">
-            Fast, reliable transport across the UK and Europe • Get your quote in 30 seconds
+    <div className="min-h-screen bg-ht-canvas">
+      <div className="relative overflow-hidden bg-gradient-to-br from-ht-navy via-ht-navy-mid to-ht-slate py-16 text-white">
+        <div className="pointer-events-none absolute inset-0 bg-[linear-gradient(105deg,transparent_40%,rgba(217,119,6,0.08)_100%)]" />
+        <div className="relative mx-auto max-w-6xl px-6 text-center">
+          <div className="mb-6 flex justify-center">
+            <div className="rounded-lg border border-white/30 bg-white p-2 shadow-lg">
+              <CompanyLogo className="h-10 w-auto max-w-[200px] object-contain md:h-12" />
+            </div>
+          </div>
+          <p className="text-xs font-semibold uppercase tracking-[0.2em] text-amber-400/90">Haulage quote</p>
+          <h1 className="mb-4 mt-3 text-4xl font-bold md:text-5xl">Request a transport quote</h1>
+          <p className="mb-8 text-lg text-slate-300 md:text-xl">
+            UK and international road freight — indicative pricing in minutes. Final rates confirmed by our transport
+            office.
           </p>
-          <div className="flex flex-wrap justify-center gap-8 text-sm">
-            {["Instant Online Quotes", "24/7 Tracking", "Competitive Pricing", "Reliable Service"].map((t) => (
+          <div className="flex flex-wrap justify-center gap-6 text-sm text-slate-200 md:gap-10">
+            {["Clear pricing breakdown", "Suitable vehicle classes", "Email quote to our team", "Professional haulier"].map((t) => (
               <div key={t} className="flex items-center gap-2">
-                <Check size={20} />
+                <Check className="h-5 w-5 shrink-0 text-amber-400" />
                 <span>{t}</span>
               </div>
             ))}
           </div>
-          <p className="mt-8 text-sm text-blue-200">
-            <Link to="/welcome" className="underline">
-              Staff login / onboarding
+          <p className="mt-8 text-sm text-slate-400">
+            <Link to="/login" className="font-medium text-white underline decoration-ht-amber/60 hover:decoration-white">
+              Staff — operations login
             </Link>
           </p>
         </div>
@@ -117,10 +127,10 @@ export default function QuotePage() {
           ].map((s, i) => (
             <div key={s.n} className="flex items-center gap-4">
               {i > 0 && <ChevronRight size={20} className="text-gray-400" />}
-              <div className={`flex items-center gap-2 ${step >= s.n ? "text-[#2563EB]" : "text-gray-400"}`}>
+              <div className={`flex items-center gap-2 ${step >= s.n ? "text-ht-slate" : "text-gray-400"}`}>
                 <div
                   className={`flex h-10 w-10 items-center justify-center rounded-full font-semibold ${
-                    step >= s.n ? "bg-[#2563EB] text-white" : "bg-gray-200"
+                    step >= s.n ? "bg-ht-slate text-white" : "bg-gray-200"
                   }`}
                 >
                   {s.n}
@@ -133,8 +143,8 @@ export default function QuotePage() {
 
         {step === 1 && (
           <Card className="rounded-2xl shadow-lg">
-            <div className="border-b border-gray-100 px-6 py-4">
-              <h2 className="text-2xl font-semibold">Journey Details</h2>
+            <div className="border-b border-ht-border bg-ht-canvas/40 px-6 py-4">
+              <h2 className="text-2xl font-semibold text-ht-navy">Journey details</h2>
             </div>
             <div className="space-y-6 p-6">
               <div>
@@ -145,11 +155,11 @@ export default function QuotePage() {
                     onClick={() => set("serviceType", "domestic")}
                     className={`rounded-xl border-2 p-6 text-left transition-all ${
                       form.serviceType === "domestic"
-                        ? "border-[#2563EB] bg-blue-50"
-                        : "border-gray-200 hover:border-gray-300"
+                        ? "border-ht-slate bg-ht-slate/5"
+                        : "border-ht-border hover:border-slate-300"
                     }`}
                   >
-                    <Truck size={32} className={form.serviceType === "domestic" ? "text-[#2563EB]" : "text-gray-400"} />
+                    <Truck size={32} className={form.serviceType === "domestic" ? "text-ht-slate" : "text-gray-400"} />
                     <h3 className="mt-3 text-lg font-semibold">UK Domestic</h3>
                     <p className="mt-1 text-sm text-gray-600">Nationwide delivery across the UK</p>
                   </button>
@@ -158,11 +168,11 @@ export default function QuotePage() {
                     onClick={() => set("serviceType", "international")}
                     className={`rounded-xl border-2 p-6 text-left transition-all ${
                       form.serviceType === "international"
-                        ? "border-[#2563EB] bg-blue-50"
-                        : "border-gray-200 hover:border-gray-300"
+                        ? "border-ht-slate bg-ht-slate/5"
+                        : "border-ht-border hover:border-slate-300"
                     }`}
                   >
-                    <Truck size={32} className={form.serviceType === "international" ? "text-[#2563EB]" : "text-gray-400"} />
+                    <Truck size={32} className={form.serviceType === "international" ? "text-ht-slate" : "text-gray-400"} />
                     <h3 className="mt-3 text-lg font-semibold">International</h3>
                     <p className="mt-1 text-sm text-gray-600">UK to EU and worldwide</p>
                   </button>
@@ -172,7 +182,7 @@ export default function QuotePage() {
                 <div>
                   <label className="mb-1 block text-sm font-medium">Collection postcode</label>
                   <input
-                    className="w-full rounded-lg border border-gray-200 px-3 py-2"
+                    className="w-full rounded-lg border border-ht-border px-3 py-2 outline-none focus:ring-2 focus:ring-ht-slate/20"
                     value={form.collectionPostcode}
                     onChange={(e) => set("collectionPostcode", e.target.value)}
                   />
@@ -180,7 +190,7 @@ export default function QuotePage() {
                 <div>
                   <label className="mb-1 block text-sm font-medium">Delivery postcode</label>
                   <input
-                    className="w-full rounded-lg border border-gray-200 px-3 py-2"
+                    className="w-full rounded-lg border border-ht-border px-3 py-2 outline-none focus:ring-2 focus:ring-ht-slate/20"
                     value={form.deliveryPostcode}
                     onChange={(e) => set("deliveryPostcode", e.target.value)}
                   />
@@ -189,7 +199,7 @@ export default function QuotePage() {
                   <label className="mb-1 block text-sm font-medium">Collection date</label>
                   <input
                     type="date"
-                    className="w-full rounded-lg border border-gray-200 px-3 py-2"
+                    className="w-full rounded-lg border border-ht-border px-3 py-2 outline-none focus:ring-2 focus:ring-ht-slate/20"
                     value={form.collectionDate}
                     onChange={(e) => set("collectionDate", e.target.value)}
                   />
@@ -198,7 +208,7 @@ export default function QuotePage() {
                   <label className="mb-1 block text-sm font-medium">Delivery date</label>
                   <input
                     type="date"
-                    className="w-full rounded-lg border border-gray-200 px-3 py-2"
+                    className="w-full rounded-lg border border-ht-border px-3 py-2 outline-none focus:ring-2 focus:ring-ht-slate/20"
                     value={form.deliveryDate}
                     onChange={(e) => set("deliveryDate", e.target.value)}
                   />
@@ -207,7 +217,7 @@ export default function QuotePage() {
               <div>
                 <label className="mb-1 block text-sm font-medium">Vehicle type</label>
                 <select
-                  className="w-full rounded-lg border border-gray-200 px-3 py-2"
+                  className="w-full rounded-lg border border-ht-border px-3 py-2 outline-none focus:ring-2 focus:ring-ht-slate/20"
                   value={form.vehicleType}
                   onChange={(e) => set("vehicleType", e.target.value)}
                 >
@@ -226,8 +236,8 @@ export default function QuotePage() {
 
         {step === 2 && (
           <Card className="rounded-2xl shadow-lg">
-            <div className="border-b border-gray-100 px-6 py-4">
-              <h2 className="text-2xl font-semibold">Your details</h2>
+            <div className="border-b border-ht-border bg-ht-canvas/40 px-6 py-4">
+              <h2 className="text-2xl font-semibold text-ht-navy">Your details</h2>
             </div>
             <div className="space-y-4 p-6">
               {(
@@ -241,7 +251,7 @@ export default function QuotePage() {
                 <div key={k}>
                   <label className="mb-1 block text-sm font-medium">{label}</label>
                   <input
-                    className="w-full rounded-lg border border-gray-200 px-3 py-2"
+                    className="w-full rounded-lg border border-ht-border px-3 py-2 outline-none focus:ring-2 focus:ring-ht-slate/20"
                     value={form[k]}
                     onChange={(e) => set(k, e.target.value)}
                   />
@@ -261,8 +271,11 @@ export default function QuotePage() {
 
         {step === 3 && result && (
           <Card className="rounded-2xl shadow-lg">
-            <div className="border-b border-gray-100 px-6 py-4">
-              <h2 className="text-2xl font-semibold">Your quote</h2>
+            <div className="border-b border-ht-border bg-ht-canvas/40 px-6 py-4">
+              <div className="mb-4 flex justify-center border-b border-ht-border pb-4">
+                <CompanyLogo className="h-12 w-auto max-w-[220px] object-contain" />
+              </div>
+              <h2 className="text-2xl font-semibold text-ht-navy">Your quote</h2>
               <p className="text-sm text-gray-500">Reference: {result.quoteRef}</p>
             </div>
             <div className="space-y-4 p-6">
@@ -288,21 +301,57 @@ export default function QuotePage() {
               </div>
               <div className="flex flex-wrap gap-2">
                 <Btn
-                  onClick={() =>
-                    toast.success("Quote request submitted!", {
-                      description: `Reference: ${result.quoteRef}. We'll contact you shortly.`,
-                    })
-                  }
+                  onClick={() => {
+                    const body = [
+                      "Please follow up on this online quote request.",
+                      "",
+                      `Quote reference: ${result.quoteRef}`,
+                      `Estimated total: £${result.total.toFixed(2)} (incl. fuel surcharge)`,
+                      `Distance (est.): ${result.distance} mi`,
+                      "",
+                      "Contact",
+                      `Name: ${form.customerName}`,
+                      `Company: ${form.companyName}`,
+                      `Email: ${form.customerEmail}`,
+                      `Phone: ${form.customerPhone}`,
+                      "",
+                      "Journey",
+                      `Service: ${form.serviceType}`,
+                      `Collection: ${form.collectionPostcode} — ${form.collectionDate}`,
+                      `Delivery: ${form.deliveryPostcode} — ${form.deliveryDate}`,
+                      `Vehicle type: ${form.vehicleType}`,
+                      form.specialRequirements ? `\nNotes:\n${form.specialRequirements}` : "",
+                    ]
+                      .filter(Boolean)
+                      .join("\n");
+                    window.location.assign(mailtoOffice(`Quote enquiry ${result.quoteRef}`, body));
+                    toast.success("Opening your email app", {
+                      description: `Send the message to ${OFFICE_ENQUIRIES_EMAIL} to submit your request.`,
+                    });
+                  }}
                 >
                   Submit request
                 </Btn>
                 <Btn
                   variant="outline"
-                  onClick={() =>
-                    toast.success("Booking confirmed!", {
-                      description: "You'll receive confirmation via email shortly.",
-                    })
-                  }
+                  onClick={() => {
+                    const body = [
+                      "I would like to confirm a booking for the following estimate.",
+                      "",
+                      `Quote reference: ${result.quoteRef}`,
+                      `Estimated total: £${result.total.toFixed(2)} (incl. fuel surcharge)`,
+                      "",
+                      "Contact",
+                      `Name: ${form.customerName}`,
+                      `Company: ${form.companyName}`,
+                      `Email: ${form.customerEmail}`,
+                      `Phone: ${form.customerPhone}`,
+                    ].join("\n");
+                    window.location.assign(mailtoOffice(`Booking enquiry ${result.quoteRef}`, body));
+                    toast.success("Opening your email app", {
+                      description: `Send the message to ${OFFICE_ENQUIRIES_EMAIL} to confirm your booking.`,
+                    });
+                  }}
                 >
                   Confirm booking
                 </Btn>

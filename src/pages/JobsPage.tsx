@@ -1,9 +1,11 @@
 import { useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import { Download, Plus, Search } from "lucide-react";
-import { useLocalStorage } from "../hooks/useLocalStorage";
+import { useJobs } from "../context/JobsContext";
 import type { Job } from "../types";
 import { Btn, Card } from "../components/Layout";
+import { prependBrandedCsvPreamble } from "../lib/companyBrand";
+import { platformPath } from "../routes/paths";
 
 function exportCsv(rows: Job[]) {
   const headers = [
@@ -48,7 +50,7 @@ function exportCsv(rows: Job[]) {
       y.supplierInvoiceReceived === "yes" ? "Yes" : "No",
     ].join(",")
   );
-  const csv = [headers.join(","), ...lines].join("\n");
+  const csv = [...prependBrandedCsvPreamble(headers), headers.join(","), ...lines].join("\n");
   const blob = new Blob([csv], { type: "text/csv" });
   const url = URL.createObjectURL(blob);
   const a = document.createElement("a");
@@ -59,7 +61,7 @@ function exportCsv(rows: Job[]) {
 }
 
 export default function JobsPage() {
-  const [jobs] = useLocalStorage<Job[]>("jobs", []);
+  const [jobs] = useJobs();
   const [q, setQ] = useState("");
   const filtered = useMemo(() => {
     if (!q.trim()) return jobs;
@@ -82,7 +84,7 @@ export default function JobsPage() {
             placeholder="Search all columns..."
             value={q}
             onChange={(e) => setQ(e.target.value)}
-            className="h-9 w-full rounded-lg border border-gray-200 py-2 pl-10 pr-3 text-sm outline-none focus:ring-2 focus:ring-blue-500/30"
+            className="h-9 w-full rounded-lg border border-ht-border bg-white py-2 pl-10 pr-3 text-sm outline-none focus:ring-2 focus:ring-ht-slate/20"
           />
         </div>
         <div className="flex items-center gap-2">
@@ -94,7 +96,7 @@ export default function JobsPage() {
           >
             <Download size={16} /> Export CSV
           </Btn>
-          <Link to="/jobs/create">
+          <Link to={platformPath("/jobs/create")}>
             <Btn className="h-9 gap-2 py-1.5 text-sm">
               <Plus size={16} /> New Job
             </Btn>
@@ -105,7 +107,7 @@ export default function JobsPage() {
       {jobs.length === 0 && (
         <Card className="py-12 text-center">
           <p className="mb-4 text-gray-600">No jobs yet — create your first job.</p>
-          <Link to="/jobs/create">
+          <Link to={platformPath("/jobs/create")}>
             <Btn className="gap-2">
               <Plus size={16} /> Create Job
             </Btn>
@@ -155,12 +157,12 @@ export default function JobsPage() {
                 {filtered.map((d, h) => (
                   <tr
                     key={d.id}
-                    className={`border-b border-gray-200 transition-colors hover:bg-blue-50 ${
+                    className={`border-b border-ht-border transition-colors hover:bg-ht-slate/[0.04] ${
                       h % 2 === 0 ? "bg-white" : "bg-gray-50"
                     }`}
                   >
                     <td className="sticky left-0 z-10 border-r border-gray-200 bg-inherit px-3 py-2 text-xs font-medium">
-                      <Link to={`/jobs/${d.id}`} className="text-[#2563EB] hover:underline">
+                      <Link to={platformPath(`/jobs/${d.id}`)} className="font-medium text-ht-slate hover:underline">
                         {d.jobNumber}
                       </Link>
                     </td>
@@ -178,7 +180,7 @@ export default function JobsPage() {
                           d.status === "completed"
                             ? "bg-green-100 text-green-800"
                             : d.status === "in-progress"
-                              ? "bg-blue-100 text-blue-800"
+                              ? "bg-ht-slate/15 text-ht-slate-dark"
                               : "bg-gray-100 text-gray-800"
                         }`}
                       >

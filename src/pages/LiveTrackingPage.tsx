@@ -1,11 +1,12 @@
 import { Link } from "react-router-dom";
-import { MapPin, Navigation } from "lucide-react";
-import { useLocalStorage } from "../hooks/useLocalStorage";
-import type { Job } from "../types";
+import { MapPin } from "lucide-react";
+import { useJobs } from "../context/JobsContext";
 import { Btn, Card } from "../components/Layout";
+import { FleetMap } from "../components/FleetMap";
+import { platformPath } from "../routes/paths";
 
 export default function LiveTrackingPage() {
-  const [jobs] = useLocalStorage<Job[]>("jobs", []);
+  const [jobs] = useJobs();
   const active = jobs.filter((j) => j.status !== "completed");
 
   return (
@@ -15,18 +16,12 @@ export default function LiveTrackingPage() {
         <p className="mt-1 text-gray-500">Monitor active jobs on the road</p>
       </div>
 
-      <Card className="flex h-64 items-center justify-center bg-gradient-to-br from-blue-50 to-slate-100">
-        <div className="text-center text-gray-500">
-          <Navigation className="mx-auto mb-2 text-[#2563EB]" size={40} />
-          <p className="font-medium">Map view</p>
-          <p className="text-sm">Connect a maps API to plot vehicle positions from telematics.</p>
-        </div>
-      </Card>
+      <FleetMap jobs={jobs} />
 
       {active.length === 0 ? (
         <Card className="p-8 text-center text-gray-600">
           <p className="mb-4">No active jobs.</p>
-          <Link to="/jobs/create">
+          <Link to={platformPath("/jobs/create")}>
             <Btn>Create Job</Btn>
           </Link>
         </Card>
@@ -46,9 +41,9 @@ export default function LiveTrackingPage() {
               </div>
               <div className="text-right text-sm">
                 <div className="text-gray-600">Status</div>
-                <div className="font-medium capitalize text-[#2563EB]">{j.status.replace("-", " ")}</div>
+                <div className="font-medium capitalize text-ht-slate">{j.status.replace("-", " ")}</div>
               </div>
-              <Link to={`/jobs/${j.id}`}>
+              <Link to={platformPath(`/jobs/${j.id}`)}>
                 <Btn variant="outline" className="text-sm">
                   Details
                 </Btn>

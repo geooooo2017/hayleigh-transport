@@ -1,7 +1,11 @@
 import { Navigate, Route, Routes } from "react-router-dom";
 import { Layout } from "./components/Layout";
-import { OnboardingRedirect } from "./components/OnboardingRedirect";
 import { RequireAuth } from "./components/RequireAuth";
+import { JobsProvider } from "./context/JobsContext";
+import { MarketingLayout } from "./pages/marketing/MarketingLayout";
+import MarketingAbout from "./pages/marketing/MarketingAbout";
+import MarketingContact from "./pages/marketing/MarketingContact";
+import MarketingHome from "./pages/marketing/MarketingHome";
 import CustomerInvoicingPage from "./pages/CustomerInvoicingPage";
 import CustomersPage from "./pages/CustomersPage";
 import DashboardPage from "./pages/DashboardPage";
@@ -18,41 +22,47 @@ import MonthlyReportPage from "./pages/MonthlyReportPage";
 import QuotePage from "./pages/QuotePage";
 import SettingsPage from "./pages/SettingsPage";
 import StatisticsPage from "./pages/StatisticsPage";
-import WelcomePage from "./pages/WelcomePage";
 
 export default function App() {
   return (
-    <>
-      <OnboardingRedirect />
-      <Routes>
-        <Route path="/welcome" element={<WelcomePage />} />
-        <Route path="/login" element={<LoginPage />} />
-        <Route path="/quote" element={<QuotePage />} />
-        <Route
-          path="/"
-          element={
-            <RequireAuth>
+    <Routes>
+      <Route path="/welcome" element={<Navigate to="/login" replace />} />
+      <Route path="/login" element={<LoginPage />} />
+      <Route path="/quote" element={<QuotePage />} />
+
+      <Route path="/" element={<MarketingLayout />}>
+        <Route index element={<MarketingHome />} />
+        <Route path="about" element={<MarketingAbout />} />
+        <Route path="contact" element={<MarketingContact />} />
+      </Route>
+
+      <Route
+        path="/platform"
+        element={
+          <RequireAuth>
+            <JobsProvider>
               <Layout />
-            </RequireAuth>
-          }
-        >
-          <Route index element={<DashboardPage />} />
-          <Route path="job-board" element={<JobBoardPage />} />
-          <Route path="jobs" element={<JobsPage />} />
-          <Route path="jobs/create" element={<JobCreatePage />} />
-          <Route path="jobs/:jobId" element={<JobDetailPage />} />
-          <Route path="live-tracking" element={<LiveTrackingPage />} />
-          <Route path="finance-calculator" element={<FinanceCalculatorPage />} />
-          <Route path="financial-tracking" element={<FinancialTrackingPage />} />
-          <Route path="customer-invoicing" element={<CustomerInvoicingPage />} />
-          <Route path="customers" element={<CustomersPage />} />
-          <Route path="drivers-vehicles" element={<DriversVehiclesPage />} />
-          <Route path="statistics" element={<StatisticsPage />} />
-          <Route path="monthly-report" element={<MonthlyReportPage />} />
-          <Route path="settings" element={<SettingsPage />} />
-        </Route>
-        <Route path="*" element={<Navigate to="/" replace />} />
-      </Routes>
-    </>
+            </JobsProvider>
+          </RequireAuth>
+        }
+      >
+        <Route index element={<DashboardPage />} />
+        <Route path="job-board" element={<JobBoardPage />} />
+        <Route path="jobs" element={<JobsPage />} />
+        <Route path="jobs/create" element={<JobCreatePage />} />
+        <Route path="jobs/:jobId" element={<JobDetailPage />} />
+        <Route path="live-tracking" element={<LiveTrackingPage />} />
+        <Route path="finance-calculator" element={<FinanceCalculatorPage />} />
+        <Route path="financial-tracking" element={<FinancialTrackingPage />} />
+        <Route path="customer-invoicing" element={<CustomerInvoicingPage />} />
+        <Route path="customers" element={<CustomersPage />} />
+        <Route path="drivers-vehicles" element={<DriversVehiclesPage />} />
+        <Route path="statistics" element={<StatisticsPage />} />
+        <Route path="monthly-report" element={<MonthlyReportPage />} />
+        <Route path="settings" element={<SettingsPage />} />
+      </Route>
+
+      <Route path="*" element={<Navigate to="/" replace />} />
+    </Routes>
   );
 }
