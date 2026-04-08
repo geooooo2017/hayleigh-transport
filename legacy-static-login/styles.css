@@ -1,0 +1,238 @@
+:root {
+  --bg-page: #2557d6;
+  --card-bg: #ffffff;
+  --navy: #1a2744;
+  --text-muted: #64748b;
+  --text-blue: #1d4ed8;
+  --quick-bg: #eff6ff;
+  --quick-border: #bfdbfe;
+  --input-bg: #f1f5f9;
+  --input-border: transparent;
+  --btn-blue: #2557d6;
+  --btn-blue-hover: #1e4bb8;
+  --radius-card: 16px;
+  --radius-control: 10px;
+  --radius-icon: 12px;
+  --shadow-card: 0 24px 48px rgba(15, 23, 42, 0.12);
+}
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+html {
+  -webkit-font-smoothing: antialiased;
+}
+
+body {
+  margin: 0;
+  min-height: 100vh;
+  font-family: "Inter", system-ui, -apple-system, sans-serif;
+  background: var(--bg-page);
+  color: var(--navy);
+}
+
+.page {
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 2rem 1.25rem 2.5rem;
+}
+
+.card {
+  width: 100%;
+  max-width: 420px;
+  background: var(--card-bg);
+  border-radius: var(--radius-card);
+  padding: 2.25rem 2rem 2rem;
+  box-shadow: var(--shadow-card);
+}
+
+.card__brand {
+  text-align: center;
+  margin-bottom: 1.75rem;
+}
+
+.brand-icon {
+  width: 56px;
+  height: 56px;
+  margin: 0 auto 1rem;
+  background: var(--btn-blue);
+  border-radius: var(--radius-icon);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #fff;
+}
+
+.brand-icon__truck {
+  width: 30px;
+  height: 30px;
+}
+
+.card__title {
+  margin: 0 0 0.5rem;
+  font-size: 1.375rem;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  color: var(--navy);
+  line-height: 1.25;
+}
+
+.card__subtitle {
+  margin: 0;
+  font-size: 0.875rem;
+  line-height: 1.5;
+  color: var(--text-muted);
+  font-weight: 400;
+}
+
+.quick-login {
+  background: var(--quick-bg);
+  border: 1px solid var(--quick-border);
+  border-radius: var(--radius-control);
+  padding: 1rem 1rem 1.125rem;
+  margin-bottom: 1.5rem;
+}
+
+.quick-login__title {
+  margin: 0 0 0.25rem;
+  font-size: 0.9375rem;
+  font-weight: 600;
+  color: var(--text-blue);
+}
+
+.quick-login__hint {
+  margin: 0 0 0.875rem;
+  font-size: 0.8125rem;
+  color: var(--text-blue);
+  opacity: 0.9;
+}
+
+.quick-login__users {
+  display: flex;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+}
+
+.user-chip {
+  flex: 1;
+  min-width: 0;
+  padding: 0.625rem 0.5rem;
+  border: 1px solid #e2e8f0;
+  border-radius: var(--radius-control);
+  background: #fff;
+  cursor: pointer;
+  font-family: inherit;
+  text-align: center;
+  transition: border-color 0.15s, box-shadow 0.15s;
+}
+
+.user-chip:hover {
+  border-color: var(--quick-border);
+  box-shadow: 0 2px 8px rgba(37, 87, 214, 0.08);
+}
+
+.user-chip:focus-visible {
+  outline: 2px solid var(--btn-blue);
+  outline-offset: 2px;
+}
+
+.user-chip__name {
+  display: block;
+  font-size: 0.875rem;
+  font-weight: 700;
+  color: var(--navy);
+  line-height: 1.2;
+}
+
+.user-chip__role {
+  display: block;
+  margin-top: 0.2rem;
+  font-size: 0.6875rem;
+  color: var(--text-muted);
+  font-weight: 500;
+}
+
+.login-form {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.field__label {
+  display: block;
+  font-size: 0.8125rem;
+  font-weight: 700;
+  color: var(--navy);
+  margin-bottom: 0.375rem;
+}
+
+.field__input {
+  width: 100%;
+  padding: 0.75rem 0.875rem;
+  font-size: 0.9375rem;
+  font-family: inherit;
+  border: 1px solid var(--input-border);
+  border-radius: var(--radius-control);
+  background: var(--input-bg);
+  color: var(--navy);
+  transition: box-shadow 0.15s;
+}
+
+.field__input::placeholder {
+  color: #94a3b8;
+}
+
+.field__input:focus {
+  outline: none;
+  box-shadow: 0 0 0 3px rgba(37, 87, 214, 0.25);
+}
+
+.btn-login {
+  margin-top: 0.25rem;
+  width: 100%;
+  padding: 0.875rem 1rem;
+  font-size: 1rem;
+  font-weight: 700;
+  font-family: inherit;
+  color: #fff;
+  background: var(--btn-blue);
+  border: none;
+  border-radius: var(--radius-control);
+  cursor: pointer;
+  transition: background 0.15s;
+}
+
+.btn-login:hover {
+  background: var(--btn-blue-hover);
+}
+
+.btn-login:focus-visible {
+  outline: 2px solid #fff;
+  outline-offset: 2px;
+}
+
+.page__footer {
+  margin: 1.5rem 0 0;
+  text-align: center;
+  font-size: 0.875rem;
+  color: #fff;
+  font-weight: 500;
+  max-width: 28rem;
+  line-height: 1.45;
+}
+
+@media (max-width: 380px) {
+  .quick-login__users {
+    flex-direction: column;
+  }
+
+  .user-chip {
+    flex: none;
+  }
+}
