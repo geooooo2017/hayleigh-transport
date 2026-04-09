@@ -1,6 +1,13 @@
 import { jsPDF } from "jspdf";
 import type { Job } from "../types";
 import { COMPANY_LEGAL_NAME, LOGO_PATH } from "./companyBrand";
+import { formatAddressBlock } from "./jobAddress";
+import { defaultExportCompanyDetails, type UserCompanyDetails } from "./userCompanyProfile";
+
+export type BookingPdfIssuer = {
+  details: UserCompanyDetails;
+  preparedBy?: string;
+};
 
 const MARGIN = 15;
 const PAGE_W = 210;
@@ -81,6 +88,39 @@ function addParagraph(doc: jsPDF, text: string, y: number, fontSize = 10): numbe
   return y + lines.length * LINE_MM + 3;
 }
 
+function addIssuerContactBlock(doc: jsPDF, y: number, d: UserCompanyDetails, preparedBy?: string): number {
+  doc.setFont("helvetica", "normal");
+  doc.setFontSize(8);
+  doc.setTextColor(90);
+  const lines: string[] = [];
+  const t = (s: string) => s.trim();
+  if (t(d.companyLegalName)) lines.push(t(d.companyLegalName));
+  if (t(d.telephone)) lines.push(`Tel: ${t(d.telephone)}`);
+  if (t(d.mobile)) lines.push(`Mob: ${t(d.mobile)}`);
+  if (t(d.email)) lines.push(`Email: ${t(d.email)}`);
+  if (t(d.website)) lines.push(`Website: ${t(d.website)}`);
+  lines.push("");
+  lines.push("Company details");
+  if (t(d.companyNumber)) lines.push(`Company Number: ${t(d.companyNumber)}`);
+  if (t(d.vatNumber)) lines.push(`GB VAT Number: ${t(d.vatNumber)}`);
+  if (t(d.eoriNumber)) lines.push(`EORI Number: ${t(d.eoriNumber)}`);
+  if (t(preparedBy ?? "")) {
+    lines.push("");
+    lines.push(`Prepared by: ${t(preparedBy!)}`);
+  }
+  for (const line of lines) {
+    if (line === "") {
+      y += 2;
+      continue;
+    }
+    y = nextPageIfNeeded(doc, y, 6);
+    doc.text(line, MARGIN, y);
+    y += 4;
+  }
+  doc.setTextColor(0);
+  return y + 2;
+}
+
 function addFooter(doc: jsPDF, variant: "customer" | "supplier") {
   const msg =
     variant === "customer"
@@ -96,9 +136,15 @@ function addFooter(doc: jsPDF, variant: "customer" | "supplier") {
   doc.setTextColor(0);
 }
 
-export async function buildBookingPdf(job: Job, variant: "customer" | "supplier"): Promise<jsPDF> {
+export async function buildBookingPdf(
+  job: Job,
+  variant: "customer" | "supplier",
+  issuer?: BookingPdfIssuer
+): Promise<jsPDF> {
   const doc = new jsPDF({ unit: "mm", format: "a4" });
   let y = MARGIN;
+  const details = issuer?.details ?? defaultExportCompanyDetails();
+  const preparedBy = issuer?.preparedBy;
 
   const logo = await loadLogoPngDataUrl();
   if (logo) {
@@ -109,18 +155,14 @@ export async function buildBookingPdf(job: Job, variant: "customer" | "supplier"
   } else {
     doc.setFont("helvetica", "bold");
     doc.setFontSize(14);
-    doc.text("HAYLEIGH TRANSPORT", MARGIN, y + 4);
+    doc.text(details.companyLegalName.trim().toUpperCase() || "HAYLEIGH TRANSPORT", MARGIN, y + 4);
     doc.setFont("helvetica", "normal");
     doc.setFontSize(9);
-    doc.text(COMPANY_LEGAL_NAME, MARGIN, y + 10);
+    doc.text(details.companyLegalName.trim() || COMPANY_LEGAL_NAME, MARGIN, y + 10);
     y += 14;
   }
 
-  doc.setFontSize(8);
-  doc.setTextColor(90);
-  doc.text(COMPANY_LEGAL_NAME, MARGIN, y);
-  doc.setTextColor(0);
-  y += 6;
+  y = addIssuerContactBlock(doc, y, details, preparedBy);
 
   doc.setFont("helvetica", "bold");
   doc.setFontSize(15);
@@ -147,10 +189,10 @@ export async function buildBookingPdf(job: Job, variant: "customer" | "supplier"
   }
 
   y = drawSectionTitle(doc, "Collection address", y);
-  y = addParagraph(doc, job.collectionLocation, y);
+  y = addParagraph(doc, formatAddressBlock(job, "collection"), y);
 
   y = drawSectionTitle(doc, "Delivery address", y);
-  y = addParagraph(doc, job.deliveryLocation, y);
+  y = addParagraph(doc, formatAddressBlock(job, "delivery"), y);
 
   if (variant === "customer") {
     y = drawSectionTitle(doc, "Customer", y);
@@ -213,18 +255,18 @@ export async function buildBookingPdf(job: Job, variant: "customer" | "supplier"
   return doc;
 }
 
-export async function downloadCustomerBookingPdf(job: Job): Promise<void> {
-  const doc = await buildBookingPdf(job, "customer");
+export async function downloadCustomerBookingPdf(job: Job, issuer?: BookingPdfIssuer): Promise<void> {
+  const doc = await buildBookingPdf(job, "customer", issuer);
   doc.save(`Hayleigh-booking-customer-${job.jobNumber.replace(/[/\\?%*:|"<>]/g, "-")}.pdf`);
 }
 
-export async function downloadSupplierBookingPdf(job: Job): Promise<void> {
-  const doc = await buildBookingPdf(job, "supplier");
+export async function downloadSupplierBookingPdf(job: Job, issuer?: BookingPdfIssuer): Promise<void> {
+  const doc = await buildBookingPdf(job, "supplier", issuer);
   doc.save(`Hayleigh-booking-supplier-${job.jobNumber.replace(/[/\\?%*:|"<>]/g, "-")}.pdf`);
 }
 
-export async function downloadBothBookingPdfs(job: Job): Promise<void> {
-  await downloadCustomerBookingPdf(job);
+export async function downloadBothBookingPdfs(job: Job, issuer?: BookingPdfIssuer): Promise<void> {
+  await downloadCustomerBookingPdf(job, issuer);
   await new Promise((r) => setTimeout(r, 450));
-  await downloadSupplierBookingPdf(job);
+  await downloadSupplierBookingPdf(job, issuer);
 }

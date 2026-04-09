@@ -1,16 +1,46 @@
+import { useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
-import { ClipboardList, Plus, Truck, Users } from "lucide-react";
+import { ClipboardList, MapPin, Plus, Smartphone, Truck, Users } from "lucide-react";
+import { useAuth } from "../context/AuthContext";
 import { useLocalStorage } from "../hooks/useLocalStorage";
 import { useJobs } from "../context/JobsContext";
-import type { Customer } from "../types";
+import type { Customer, Driver, Job, Vehicle } from "../types";
+import { useCustomerArrivalEtaAlerts } from "../hooks/useCustomerArrivalEtaAlerts";
+import { formatAddressSummary } from "../lib/jobAddress";
+import { fetchDriverPositionsForMap } from "../lib/driverPositionsApi";
+import { FleetMap, type FleetDriverPin } from "../components/FleetMap";
 import { Btn, Card } from "../components/Layout";
+import {
+  applyMobileTrackingTestProject,
+  MOBILE_TEST_JOB_ID,
+  MOBILE_TEST_JOB_NUMBER,
+} from "../lib/mobileTrackingTestProject";
+import { notifySuccess } from "../lib/platformNotify";
 import { platformPath } from "../routes/paths";
 
+function statusRank(s: Job["status"]): number {
+  if (s === "in-progress") return 0;
+  if (s === "scheduled") return 1;
+  return 2;
+}
+
+function readLs<T>(key: string, fallback: T): T {
+  try {
+    const raw = localStorage.getItem(key);
+    if (raw == null) return fallback;
+    return JSON.parse(raw) as T;
+  } catch {
+    return fallback;
+  }
+}
+
 export default function DashboardPage() {
-  const [customers] = useLocalStorage<Customer[]>("customers", []);
-  const [drivers] = useLocalStorage("drivers", [] as { id: number }[]);
-  const [vehicles] = useLocalStorage("vehicles", [] as { id: number }[]);
-  const [jobs] = useJobs();
+  const { user } = useAuth();
+  const [customers, setCustomers] = useLocalStorage<Customer[]>("customers", []);
+  const [drivers, setDrivers] = useLocalStorage<Driver[]>("drivers", []);
+  const [vehicles, setVehicles] = useLocalStorage<Vehicle[]>("vehicles", []);
+  const [jobs, setJobs] = useJobs();
+  const [driverPins, setDriverPins] = useState<FleetDriverPin[]>([]);
 
   const empty = customers.length === 0 && jobs.length === 0;
   const today = new Date();
@@ -20,17 +50,100 @@ export default function DashboardPage() {
   const inProgress = jobs.filter((j) => j.status === "in-progress");
   const revenueToday = jobsToday.reduce((s, j) => s + (Number(j.sellPrice) || 0), 0);
   const revenueTotal = jobs.reduce((s, j) => s + (Number(j.sellPrice) || 0), 0);
-  const upcoming = jobs
-    .filter((j) => j.status === "scheduled")
-    .sort((a, b) => new Date(a.collectionDate).getTime() - new Date(b.collectionDate).getTime())
-    .slice(0, 5);
+
+  const sortedJobs = useMemo(() => {
+    return [...jobs].sort((a, b) => {
+      const dr = statusRank(a.status) - statusRank(b.status);
+      if (dr !== 0) return dr;
+      const ta = new Date(a.collectionDate).getTime();
+      const tb = new Date(b.collectionDate).getTime();
+      if (a.status === "completed" && b.status === "completed") return tb - ta;
+      return ta - tb;
+    });
+  }, [jobs]);
+
+  useEffect(() => {
+    const tick = () => void fetchDriverPositionsForMap().then(setDriverPins);
+    tick();
+    const id = setInterval(tick, 8000);
+    return () => clearInterval(id);
+  }, []);
+
+  useCustomerArrivalEtaAlerts(jobs, driverPins, setJobs);
 
   return (
     <div className="space-y-4 lg:space-y-6">
       <div>
         <h1 className="text-2xl font-semibold text-ht-navy lg:text-3xl">Operations dashboard</h1>
-        <p className="mt-1 text-sm text-slate-600 lg:text-base">Live view of jobs, revenue and fleet-related activity</p>
+        <p className="mt-1 text-sm text-slate-600 lg:text-base">
+          Control tower for transport: every job in one list, live map positions for work in progress, and driver GPS when
+          available. Updates about every 8 seconds.
+        </p>
       </div>
+
+      <Card className="border-2 border-emerald-200/90 bg-gradient-to-br from-emerald-50/90 to-white p-5">
+        <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+          <div>
+            <h2 className="flex items-center gap-2 text-lg font-semibold text-emerald-950">
+              <Smartphone className="shrink-0 text-emerald-700" size={22} aria-hidden />
+              Mobile tracking test (George Sweeney → Mauchline)
+            </h2>
+            <p className="mt-2 text-sm text-emerald-950/90">
+              Loads one end-to-end demo job: <strong>Bellshill (ML4 1RZ)</strong> →{" "}
+              <strong>Mauchline (KA5 5DW)</strong>, <strong>completed</strong> with POD, supplier invoice, customer
+              invoice and payment — visible under <strong>Customer Invoicing</strong>, job timeline, and reports. Route
+              pins stay on the map for history.               For <strong>live GPS</strong> on the map, open the job and set status back
+              to <strong>In progress</strong>; driver app: George Sweeney / SG65 KDK / {MOBILE_TEST_JOB_NUMBER} (HTTPS +
+              Supabase). <strong>No customer login</strong> exists — your freight customer appears under{" "}
+              <Link className="font-medium text-emerald-800 underline" to={platformPath("/customers")}>
+                Customers
+              </Link>{" "}
+              (CRM); this button also adds that demo record.
+            </p>
+            <ul className="mt-3 list-inside list-disc space-y-1 text-sm text-emerald-950/85">
+              <li>
+                <strong>Driver sign-in:</strong>{" "}
+                <Link className="font-medium text-emerald-800 underline" to="/driver">
+                  /driver
+                </Link>{" "}
+                — Name: <code className="rounded bg-white/80 px-1">George Sweeney</code>, Reg:{" "}
+                <code className="rounded bg-white/80 px-1">SG65 KDK</code> (or SG65KDK), Job:{" "}
+                <code className="rounded bg-white/80 px-1">{MOBILE_TEST_JOB_NUMBER}</code>
+              </li>
+              <li>
+                <strong>Office:</strong> open{" "}
+                <Link className="font-medium text-emerald-800 underline" to={platformPath("/live-tracking")}>
+                  Live Tracking
+                </Link>{" "}
+                or the map below — enable location on the phone after sign-in.
+              </li>
+            </ul>
+          </div>
+          <div className="flex shrink-0 flex-col gap-2">
+            <Btn
+              type="button"
+              className="gap-2 bg-emerald-700 text-white hover:bg-emerald-800"
+              onClick={() => {
+                applyMobileTrackingTestProject(setJobs, user?.name ?? "Nik");
+                setDrivers(readLs<Driver[]>("drivers", []));
+                setVehicles(readLs<Vehicle[]>("vehicles", []));
+                setCustomers(readLs<Customer[]>("customers", []));
+                notifySuccess("Mobile test job loaded", {
+                  description: `${MOBILE_TEST_JOB_NUMBER} — completed & invoiced demo. Try Customer Invoicing or job detail timeline; use In progress for live map.`,
+                  href: platformPath(`/jobs/${MOBILE_TEST_JOB_ID}`),
+                });
+              }}
+            >
+              Load / refresh test job
+            </Btn>
+            <Link to={platformPath(`/jobs/${MOBILE_TEST_JOB_ID}`)}>
+              <Btn variant="outline" className="w-full gap-2" type="button">
+                Open test job
+              </Btn>
+            </Link>
+          </div>
+        </div>
+      </Card>
 
       {empty && (
         <Card className="border-2 border-ht-border bg-gradient-to-br from-ht-canvas to-white p-6">
@@ -183,72 +296,134 @@ export default function DashboardPage() {
             </Card>
           </div>
 
-          {upcoming.length > 0 && (
-            <Card>
-              <div className="flex flex-row items-center justify-between border-b border-ht-border px-6 py-4">
-                <h2 className="text-lg font-semibold text-ht-navy">Upcoming Jobs</h2>
-                <Link to={platformPath("/jobs")}>
-                  <Btn variant="outline" className="gap-2 py-1.5 text-sm">
-                    <ClipboardList size={16} />
-                    <span className="hidden sm:inline">View All Jobs</span>
-                  </Btn>
-                </Link>
-              </div>
-              <div className="overflow-x-auto p-6 pt-0">
-                <table className="w-full">
-                  <thead>
-                    <tr className="border-b border-ht-border">
-                      <th className="px-4 py-3 text-left text-sm font-medium text-gray-600">Job Number</th>
-                      <th className="px-4 py-3 text-left text-sm font-medium text-gray-600">Customer</th>
-                      <th className="px-4 py-3 text-left text-sm font-medium text-gray-600">Collection</th>
-                      <th className="px-4 py-3 text-left text-sm font-medium text-gray-600">Delivery</th>
-                      <th className="px-4 py-3 text-left text-sm font-medium text-gray-600">Date</th>
-                      <th className="px-4 py-3 text-left text-sm font-medium text-gray-600">Status</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {upcoming.map((p) => (
-                      <tr key={p.id} className="border-b border-ht-border/60 hover:bg-ht-canvas">
-                        <td className="px-4 py-3 text-sm font-medium text-gray-900">{p.jobNumber}</td>
-                        <td className="px-4 py-3 text-sm text-gray-700">{p.customerName}</td>
-                        <td className="px-4 py-3 text-sm text-gray-700">{p.collectionLocation}</td>
-                        <td className="px-4 py-3 text-sm text-gray-700">{p.deliveryLocation}</td>
-                        <td className="px-4 py-3 text-sm text-gray-700">
-                          {new Date(p.collectionDate).toLocaleDateString()}
-                        </td>
-                        <td className="px-4 py-3">
-                          <span
-                            className={`inline-block rounded px-2 py-0.5 text-xs font-medium ${
-                              p.status === "scheduled"
-                                ? "bg-ht-slate/12 text-ht-slate-dark"
-                                : p.status === "in-progress"
-                                  ? "bg-orange-100 text-orange-700"
-                                  : "bg-green-100 text-green-700"
-                            }`}
-                          >
-                            {p.status === "scheduled"
-                              ? "Scheduled"
-                              : p.status === "in-progress"
-                                ? "In Progress"
-                                : "Completed"}
-                          </span>
-                        </td>
+          {jobs.length > 0 && (
+            <>
+              <Card className="overflow-hidden p-0">
+                <div className="flex flex-col gap-1 border-b border-ht-border px-5 py-4 sm:flex-row sm:items-center sm:justify-between">
+                  <div>
+                    <h2 className="flex items-center gap-2 text-lg font-semibold text-ht-navy">
+                      <MapPin className="text-ht-slate" size={22} aria-hidden />
+                      Live map & tracking
+                    </h2>
+                    <p className="mt-1 text-sm text-slate-600">
+                      Active jobs (not completed) show collection and delivery pins. Green dots are drivers sharing location.
+                      Positions refresh automatically.
+                    </p>
+                  </div>
+                  <Link to={platformPath("/live-tracking")} className="shrink-0">
+                    <Btn variant="outline" className="gap-2 text-sm">
+                      <MapPin size={16} aria-hidden />
+                      Full live tracking
+                    </Btn>
+                  </Link>
+                </div>
+                <div className="px-3 pb-3 pt-0 sm:px-4">
+                  <FleetMap jobs={jobs} driverPins={driverPins} />
+                </div>
+              </Card>
+
+              <Card>
+                <div className="flex flex-col gap-3 border-b border-ht-border px-6 py-4 sm:flex-row sm:items-center sm:justify-between">
+                  <div>
+                    <h2 className="text-lg font-semibold text-ht-navy">All jobs</h2>
+                    <p className="mt-1 text-sm text-slate-600">
+                      {jobs.length} total — in progress first, then scheduled by date, then completed (newest first).
+                    </p>
+                  </div>
+                  <div className="flex flex-wrap gap-2">
+                    <Link to={platformPath("/jobs")}>
+                      <Btn variant="outline" className="gap-2 py-1.5 text-sm">
+                        <ClipboardList size={16} aria-hidden />
+                        Jobs table & export
+                      </Btn>
+                    </Link>
+                    <Link to={platformPath("/jobs/create")}>
+                      <Btn className="gap-2 py-1.5 text-sm">
+                        <Plus size={16} aria-hidden />
+                        New job
+                      </Btn>
+                    </Link>
+                  </div>
+                </div>
+                <div className="overflow-x-auto p-6 pt-4">
+                  <table className="w-full min-w-[920px]">
+                    <thead>
+                      <tr className="border-b border-ht-border">
+                        <th className="px-3 py-3 text-left text-sm font-medium text-gray-600">Job</th>
+                        <th className="px-3 py-3 text-left text-sm font-medium text-gray-600">Customer</th>
+                        <th className="px-3 py-3 text-left text-sm font-medium text-gray-600">Handler</th>
+                        <th className="px-3 py-3 text-left text-sm font-medium text-gray-600">Driver</th>
+                        <th className="px-3 py-3 text-left text-sm font-medium text-gray-600">Collection</th>
+                        <th className="px-3 py-3 text-left text-sm font-medium text-gray-600">Delivery</th>
+                        <th className="px-3 py-3 text-left text-sm font-medium text-gray-600">Coll. date</th>
+                        <th className="px-3 py-3 text-left text-sm font-medium text-gray-600">Status</th>
                       </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            </Card>
+                    </thead>
+                    <tbody>
+                      {sortedJobs.map((p) => (
+                        <tr key={p.id} className="border-b border-ht-border/60 hover:bg-ht-canvas">
+                          <td className="px-3 py-3 text-sm font-medium">
+                            <Link
+                              to={platformPath(`/jobs/${p.id}`)}
+                              className="text-ht-slate hover:underline"
+                            >
+                              {p.jobNumber}
+                            </Link>
+                          </td>
+                          <td className="max-w-[140px] truncate px-3 py-3 text-sm text-gray-700" title={p.customerName}>
+                            {p.customerName}
+                          </td>
+                          <td className="px-3 py-3 text-sm text-gray-700">{p.handler}</td>
+                          <td className="max-w-[100px] truncate px-3 py-3 text-sm text-gray-600" title={p.assignedDriverName}>
+                            {p.assignedDriverName || "—"}
+                          </td>
+                          <td className="max-w-[160px] px-3 py-3 text-sm text-gray-700">
+                            <span className="line-clamp-2" title={formatAddressSummary(p, "collection", 200)}>
+                              {formatAddressSummary(p, "collection", 56) || "—"}
+                            </span>
+                          </td>
+                          <td className="max-w-[160px] px-3 py-3 text-sm text-gray-700">
+                            <span className="line-clamp-2" title={formatAddressSummary(p, "delivery", 200)}>
+                              {formatAddressSummary(p, "delivery", 56) || "—"}
+                            </span>
+                          </td>
+                          <td className="whitespace-nowrap px-3 py-3 text-sm text-gray-700">
+                            {new Date(p.collectionDate).toLocaleDateString()}
+                          </td>
+                          <td className="px-3 py-3">
+                            <span
+                              className={`inline-block rounded px-2 py-0.5 text-xs font-medium ${
+                                p.status === "scheduled"
+                                  ? "bg-ht-slate/12 text-ht-slate-dark"
+                                  : p.status === "in-progress"
+                                    ? "bg-orange-100 text-orange-700"
+                                    : "bg-green-100 text-green-700"
+                              }`}
+                            >
+                              {p.status === "scheduled"
+                                ? "Scheduled"
+                                : p.status === "in-progress"
+                                  ? "In progress"
+                                  : "Completed"}
+                            </span>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </Card>
+            </>
           )}
 
-          {upcoming.length === 0 && jobs.length > 0 && (
-            <Card className="py-12 text-center">
-              <ClipboardList size={48} className="mx-auto mb-4 text-gray-300" />
-              <h3 className="mb-2 text-lg font-semibold text-gray-900">No Upcoming Jobs</h3>
-              <p className="mb-4 text-gray-600">All your jobs are completed or in progress.</p>
+          {jobs.length === 0 && (
+            <Card className="py-10 text-center">
+              <ClipboardList size={44} className="mx-auto mb-3 text-gray-300" />
+              <h3 className="mb-1 text-lg font-semibold text-gray-900">No jobs yet</h3>
+              <p className="mb-4 text-sm text-gray-600">Create a job to see it here and on the live map.</p>
               <Link to={platformPath("/jobs/create")}>
                 <Btn className="gap-2">
-                  <Plus size={16} /> Create New Job
+                  <Plus size={16} aria-hidden /> Create job
                 </Btn>
               </Link>
             </Card>

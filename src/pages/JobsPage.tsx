@@ -1,56 +1,107 @@
 import { useMemo, useState } from "react";
 import { Link } from "react-router-dom";
-import { Download, Plus, Search } from "lucide-react";
+import { Download, Plus, Search, Trash2 } from "lucide-react";
+import { notifySuccess } from "../lib/platformNotify";
+import { useAuth } from "../context/AuthContext";
 import { useJobs } from "../context/JobsContext";
+import { userCanDeleteJobs } from "../lib/permissions";
 import type { Job } from "../types";
 import { Btn, Card } from "../components/Layout";
-import { prependBrandedCsvPreamble } from "../lib/companyBrand";
+import { prependBrandedCsvPreamble, type UserCompanyDetails } from "../lib/companyBrand";
+import { computeBibbyBreakdown } from "../lib/bibbyFinancing";
+import { getUserCompanyDetails } from "../lib/userCompanyProfile";
+import { getUserBibbyTerms } from "../lib/userBibbySettings";
 import { platformPath } from "../routes/paths";
+import { formatAddressSummary } from "../lib/jobAddress";
 
-function exportCsv(rows: Job[]) {
+function csvCell(v: unknown): string {
+  const s = String(v ?? "");
+  if (/[",\n\r]/.test(s)) return `"${s.replace(/"/g, '""')}"`;
+  return s;
+}
+
+function exportCsv(rows: Job[], details: UserCompanyDetails, preparedBy: string | undefined, bibbyUserId: string | undefined) {
+  const bibbyTerms = getUserBibbyTerms(bibbyUserId);
   const headers = [
-    "Job Number",
-    "Handler",
-    "Collection",
-    "Delivery",
+    "Collection date",
+    "Delivery date",
+    "From (collection summary)",
     "Customer",
-    "Status",
-    "Buy (EX)",
-    "Sell (EX)",
-    "Fuel",
-    "Profit",
-    "Margin %",
+    "Customer email",
+    "Job status",
     "Carrier",
-    "Truck Plates",
-    "Route",
-    "POD",
-    "Invoice Sent",
-    "Supplier Due",
-    "Invoice Received",
+    "Truck plates",
+    "Routing",
+    "Buy (ex VAT)",
+    "Sell (ex VAT)",
+    "Fuel surcharge",
+    "Extra charges",
+    "Billable",
+    "GP (profit)",
+    "Margin %",
+    "Bibby invoice value (ex VAT)",
+    "Bibby days outstanding",
+    "Bibby finance cost",
+    "Net after financing",
+    "Invoice sent (customer)",
+    "Supplier inv received",
+    "POD received",
+    "POD sent",
+    "Hayleigh PO",
+    "Collection ref",
+    "Customer invoice ref",
+    "Customer payment date",
+    "Supplier due date",
+    "Job number",
+    "Handler",
+    "Notes",
+    "Collection address lines",
+    "Delivery address lines",
+    "Collection postcode",
+    "Delivery postcode",
   ];
-  const lines = rows.map((y) =>
-    [
-      y.jobNumber,
-      y.handler,
-      y.collectionDate,
-      y.deliveryDate || "",
-      y.customerName,
-      y.status,
-      y.buyPrice || 0,
-      y.sellPrice || 0,
-      y.fuelSurcharge || 0,
-      y.profit || 0,
-      y.margin || 0,
-      y.carrier || "",
-      y.truckPlates || "",
-      y.routeType || "",
-      y.podReceived === "yes" ? "Yes" : "No",
-      y.invoiceSent === "yes" ? "Yes" : "No",
-      y.supplierDueDate || "",
-      y.supplierInvoiceReceived === "yes" ? "Yes" : "No",
-    ].join(",")
-  );
-  const csv = [...prependBrandedCsvPreamble(headers), headers.join(","), ...lines].join("\n");
+  const lines = rows.map((y) => {
+    const bib = computeBibbyBreakdown(y, bibbyTerms);
+    return [
+      csvCell(y.collectionDate),
+      csvCell(y.deliveryDate || ""),
+      csvCell(formatAddressSummary(y, "collection", 200)),
+      csvCell(y.customerName),
+      csvCell(y.customerEmail || ""),
+      csvCell(y.status),
+      csvCell(y.carrier || ""),
+      csvCell(y.truckPlates || ""),
+      csvCell(y.routeType || ""),
+      csvCell(y.buyPrice || 0),
+      csvCell(y.sellPrice || 0),
+      csvCell(y.fuelSurcharge || 0),
+      csvCell(y.extraCharges || 0),
+      csvCell(y.billable === "yes" ? "Yes" : "No"),
+      csvCell(y.profit || 0),
+      csvCell(y.margin || 0),
+      csvCell(bib ? bib.invoiceValue.toFixed(2) : ""),
+      csvCell(y.bibbyDaysOutstanding != null ? y.bibbyDaysOutstanding : ""),
+      csvCell(bib ? bib.overallCost.toFixed(2) : ""),
+      csvCell(bib ? bib.profitAfterBibby.toFixed(2) : ""),
+      csvCell(y.invoiceSent === "yes" ? "Yes" : "No"),
+      csvCell(y.supplierInvoiceReceived === "yes" ? "Yes" : "No"),
+      csvCell(y.podReceived === "yes" ? "Yes" : "No"),
+      csvCell(y.podSent === "yes" ? "Yes" : "No"),
+      csvCell(y.hayleighPo || ""),
+      csvCell(y.collectionRef || ""),
+      csvCell(y.customerInvoiceRef || ""),
+      csvCell(y.customerPaymentDate || ""),
+      csvCell(y.supplierDueDate || ""),
+      csvCell(y.jobNumber),
+      csvCell(y.handler),
+      csvCell(y.notes || ""),
+      csvCell(y.collectionAddressLines),
+      csvCell(y.deliveryAddressLines),
+      csvCell(y.collectionPostcode || ""),
+      csvCell(y.deliveryPostcode || ""),
+    ].join(",");
+  });
+  const csv = [...prependBrandedCsvPreamble(headers, details, preparedBy), headers.join(","), ...lines].join("\n");
   const blob = new Blob([csv], { type: "text/csv" });
   const url = URL.createObjectURL(blob);
   const a = document.createElement("a");
@@ -61,7 +112,9 @@ function exportCsv(rows: Job[]) {
 }
 
 export default function JobsPage() {
-  const [jobs] = useJobs();
+  const { user } = useAuth();
+  const [jobs, setJobs] = useJobs();
+  const canDeleteJob = userCanDeleteJobs(user);
   const [q, setQ] = useState("");
   const filtered = useMemo(() => {
     if (!q.trim()) return jobs;
@@ -92,7 +145,13 @@ export default function JobsPage() {
             variant="outline"
             className="h-9 gap-2 py-1.5 text-sm"
             disabled={jobs.length === 0}
-            onClick={() => exportCsv(filtered)}
+            onClick={() => {
+              exportCsv(filtered, getUserCompanyDetails(user?.id), user?.name, user?.id);
+              notifySuccess("Jobs exported to CSV", {
+                description: `${filtered.length} row(s)`,
+                href: platformPath("/jobs"),
+              });
+            }}
           >
             <Download size={16} /> Export CSV
           </Btn>
@@ -117,119 +176,256 @@ export default function JobsPage() {
 
       {jobs.length > 0 && (
         <>
+          <p className="text-xs text-gray-600">
+            Job list follows the Hayleigh spreadsheet flow (dates, from, carrier, money ex VAT, billable, POD, invoices,
+            supplier payment). Scroll horizontally if needed.
+          </p>
           <div className="overflow-x-auto border border-gray-300 bg-white">
             <table className="w-full border-collapse text-sm">
               <thead>
                 <tr className="border-b border-gray-300 bg-gray-100">
-                  <th className="sticky left-0 z-20 min-w-[110px] border-r border-gray-300 bg-gray-100 px-3 py-2.5 text-left text-xs font-semibold text-gray-700">
-                    Job Number
+                  <th className="sticky left-0 z-20 min-w-[100px] border-r border-gray-300 bg-gray-100 px-2 py-2.5 text-left text-xs font-semibold text-gray-700">
+                    Job #
                   </th>
-                  <th className="min-w-[80px] border-r border-gray-300 px-3 py-2.5 text-left text-xs font-semibold text-gray-700">
+                  <th className="min-w-[72px] border-r border-gray-300 px-2 py-2.5 text-left text-xs font-semibold text-gray-700">
                     Handler
                   </th>
-                  <th className="min-w-[90px] border-r border-gray-300 px-3 py-2.5 text-left text-xs font-semibold text-gray-700">
-                    Collection
+                  <th className="min-w-[88px] border-r border-gray-300 px-2 py-2.5 text-left text-xs font-semibold text-gray-700">
+                    Coll date
                   </th>
-                  <th className="min-w-[90px] border-r border-gray-300 px-3 py-2.5 text-left text-xs font-semibold text-gray-700">
-                    Delivery
+                  <th className="min-w-[88px] border-r border-gray-300 px-2 py-2.5 text-left text-xs font-semibold text-gray-700">
+                    Del date
                   </th>
-                  <th className="min-w-[120px] border-r border-gray-300 px-3 py-2.5 text-left text-xs font-semibold text-gray-700">
+                  <th className="min-w-[120px] border-r border-gray-300 px-2 py-2.5 text-left text-xs font-semibold text-gray-700">
+                    From
+                  </th>
+                  <th className="min-w-[100px] border-r border-gray-300 px-2 py-2.5 text-left text-xs font-semibold text-gray-700">
                     Customer
                   </th>
-                  <th className="min-w-[100px] border-r border-gray-300 px-3 py-2.5 text-left text-xs font-semibold text-gray-700">
-                    Job Status
+                  <th className="min-w-[88px] border-r border-gray-300 px-2 py-2.5 text-left text-xs font-semibold text-gray-700">
+                    Status
                   </th>
-                  <th className="min-w-[85px] border-r border-gray-300 px-3 py-2.5 text-right text-xs font-semibold text-gray-700">
-                    Buy (EX)
+                  <th className="min-w-[88px] border-r border-gray-300 px-2 py-2.5 text-left text-xs font-semibold text-gray-700">
+                    Carrier
                   </th>
-                  <th className="min-w-[85px] border-r border-gray-300 px-3 py-2.5 text-right text-xs font-semibold text-gray-700">
-                    Sell (EX)
+                  <th className="min-w-[80px] border-r border-gray-300 px-2 py-2.5 text-left text-xs font-semibold text-gray-700">
+                    Truck
                   </th>
-                  <th className="min-w-[80px] border-r border-gray-300 px-3 py-2.5 text-right text-xs font-semibold text-gray-700">
-                    Profit
+                  <th className="min-w-[72px] border-r border-gray-300 px-2 py-2.5 text-left text-xs font-semibold text-gray-700">
+                    Route
                   </th>
-                  <th className="min-w-[75px] border-r border-gray-300 px-3 py-2.5 text-right text-xs font-semibold text-gray-700">
-                    Margin %
+                  <th className="min-w-[78px] border-r border-gray-300 px-2 py-2.5 text-right text-xs font-semibold text-gray-700">
+                    Buy ex
                   </th>
+                  <th className="min-w-[78px] border-r border-gray-300 px-2 py-2.5 text-right text-xs font-semibold text-gray-700">
+                    Sell ex
+                  </th>
+                  <th className="min-w-[72px] border-r border-gray-300 px-2 py-2.5 text-right text-xs font-semibold text-gray-700">
+                    Fuel
+                  </th>
+                  <th className="min-w-[56px] border-r border-gray-300 px-2 py-2.5 text-center text-xs font-semibold text-gray-700">
+                    Bill
+                  </th>
+                  <th className="min-w-[72px] border-r border-gray-300 px-2 py-2.5 text-right text-xs font-semibold text-gray-700">
+                    GP
+                  </th>
+                  <th className="min-w-[56px] border-r border-gray-300 px-2 py-2.5 text-right text-xs font-semibold text-gray-700">
+                    Marg
+                  </th>
+                  <th className="min-w-[56px] border-r border-gray-300 px-2 py-2.5 text-center text-xs font-semibold text-gray-700">
+                    Inv
+                  </th>
+                  <th className="min-w-[56px] border-r border-gray-300 px-2 py-2.5 text-center text-xs font-semibold text-gray-700">
+                    S.inv
+                  </th>
+                  <th className="min-w-[52px] border-r border-gray-300 px-2 py-2.5 text-center text-xs font-semibold text-gray-700">
+                    POD
+                  </th>
+                  <th className="min-w-[52px] border-r border-gray-300 px-2 py-2.5 text-center text-xs font-semibold text-gray-700">
+                    P.snt
+                  </th>
+                  <th className="min-w-[72px] border-r border-gray-300 px-2 py-2.5 text-left text-xs font-semibold text-gray-700">
+                    Hay PO
+                  </th>
+                  <th className="min-w-[100px] border-r border-gray-300 px-2 py-2.5 text-left text-xs font-semibold text-gray-700">
+                    Refs
+                  </th>
+                  <th className="min-w-[88px] border-r border-gray-300 px-2 py-2.5 text-left text-xs font-semibold text-gray-700">
+                    Cust pay
+                  </th>
+                  <th className="min-w-[88px] border-r border-gray-300 px-2 py-2.5 text-left text-xs font-semibold text-gray-700">
+                    Sup due
+                  </th>
+                  {canDeleteJob && (
+                    <th className="min-w-[72px] px-2 py-2.5 text-center text-xs font-semibold text-gray-700">Del</th>
+                  )}
                 </tr>
               </thead>
               <tbody>
-                {filtered.map((d, h) => (
-                  <tr
-                    key={d.id}
-                    className={`border-b border-ht-border transition-colors hover:bg-ht-slate/[0.04] ${
-                      h % 2 === 0 ? "bg-white" : "bg-gray-50"
-                    }`}
-                  >
-                    <td className="sticky left-0 z-10 border-r border-gray-200 bg-inherit px-3 py-2 text-xs font-medium">
-                      <Link to={platformPath(`/jobs/${d.id}`)} className="font-medium text-ht-slate hover:underline">
-                        {d.jobNumber}
-                      </Link>
-                    </td>
-                    <td className="border-r border-gray-200 px-3 py-2 text-xs text-gray-700">{d.handler}</td>
-                    <td className="border-r border-gray-200 px-3 py-2 text-xs text-gray-700">
-                      {new Date(d.collectionDate).toLocaleDateString()}
-                    </td>
-                    <td className="border-r border-gray-200 px-3 py-2 text-xs text-gray-700">
-                      {d.deliveryDate ? new Date(d.deliveryDate).toLocaleDateString() : "-"}
-                    </td>
-                    <td className="border-r border-gray-200 px-3 py-2 text-xs text-gray-700">{d.customerName}</td>
-                    <td className="border-r border-gray-200 px-3 py-2 text-xs">
-                      <span
-                        className={`inline-block rounded px-2 py-0.5 text-xs font-medium ${
-                          d.status === "completed"
-                            ? "bg-green-100 text-green-800"
-                            : d.status === "in-progress"
-                              ? "bg-ht-slate/15 text-ht-slate-dark"
-                              : "bg-gray-100 text-gray-800"
-                        }`}
+                {filtered.map((d, h) => {
+                  const refBits = [d.collectionRef, d.customerInvoiceRef].filter(Boolean).join(" · ");
+                  const payD = d.customerPaymentDate?.trim();
+                  const payShown =
+                    payD && payD.length >= 10 && !Number.isNaN(Date.parse(payD))
+                      ? new Date(payD).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "2-digit" })
+                      : payD || "—";
+                  const supDue = d.supplierDueDate?.trim();
+                  const supShown =
+                    supDue && supDue.length >= 10 && !Number.isNaN(Date.parse(supDue))
+                      ? new Date(supDue).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "2-digit" })
+                      : supDue || "—";
+                  return (
+                    <tr
+                      key={d.id}
+                      className={`border-b border-ht-border transition-colors hover:bg-ht-slate/[0.04] ${
+                        h % 2 === 0 ? "bg-white" : "bg-gray-50"
+                      }`}
+                    >
+                      <td className="sticky left-0 z-10 border-r border-gray-200 bg-inherit px-2 py-2 text-xs font-medium">
+                        <Link to={platformPath(`/jobs/${d.id}`)} className="text-ht-slate hover:underline">
+                          {d.jobNumber}
+                        </Link>
+                      </td>
+                      <td className="border-r border-gray-200 px-2 py-2 text-xs text-gray-700">{d.handler}</td>
+                      <td className="border-r border-gray-200 px-2 py-2 text-xs text-gray-700">
+                        {new Date(d.collectionDate).toLocaleDateString()}
+                      </td>
+                      <td className="border-r border-gray-200 px-2 py-2 text-xs text-gray-700">
+                        {d.deliveryDate ? new Date(d.deliveryDate).toLocaleDateString() : "—"}
+                      </td>
+                      <td
+                        className="max-w-[140px] truncate border-r border-gray-200 px-2 py-2 text-xs text-gray-700"
+                        title={formatAddressSummary(d, "collection", 400)}
                       >
-                        {d.status === "completed"
-                          ? "Completed"
-                          : d.status === "in-progress"
-                            ? "In Progress"
-                            : "Scheduled"}
-                      </span>
-                    </td>
-                    <td className="border-r border-gray-200 px-3 py-2 text-right font-mono text-xs text-gray-700">
-                      £{parseFloat(String(d.buyPrice || 0)).toFixed(2)}
-                    </td>
-                    <td className="border-r border-gray-200 px-3 py-2 text-right font-mono text-xs text-gray-700">
-                      £{parseFloat(String(d.sellPrice || 0)).toFixed(2)}
-                    </td>
-                    <td
-                      className={`border-r border-gray-200 px-3 py-2 text-right font-mono text-xs font-semibold ${profitClass(
-                        parseFloat(String(d.profit || 0))
-                      )}`}
-                    >
-                      £{parseFloat(String(d.profit || 0)).toFixed(2)}
-                    </td>
-                    <td
-                      className={`border-r border-gray-200 px-3 py-2 text-right font-mono text-xs font-semibold ${marginClass(
-                        parseFloat(String(d.margin || 0))
-                      )}`}
-                    >
-                      {parseFloat(String(d.margin || 0)).toFixed(1)}%
-                    </td>
-                  </tr>
-                ))}
+                        {formatAddressSummary(d, "collection", 40) || "—"}
+                      </td>
+                      <td className="border-r border-gray-200 px-2 py-2 text-xs text-gray-700">{d.customerName}</td>
+                      <td className="border-r border-gray-200 px-2 py-2 text-xs">
+                        <span
+                          className={`inline-block rounded px-1.5 py-0.5 text-[11px] font-medium ${
+                            d.status === "completed"
+                              ? "bg-green-100 text-green-800"
+                              : d.status === "in-progress"
+                                ? "bg-ht-slate/15 text-ht-slate-dark"
+                                : "bg-gray-100 text-gray-800"
+                          }`}
+                        >
+                          {d.status === "completed" ? "Done" : d.status === "in-progress" ? "Active" : "Sch"}
+                        </span>
+                      </td>
+                      <td className="max-w-[100px] truncate border-r border-gray-200 px-2 py-2 text-xs text-gray-700" title={d.carrier}>
+                        {d.carrier || "—"}
+                      </td>
+                      <td className="border-r border-gray-200 px-2 py-2 text-xs text-gray-700">{d.truckPlates || "—"}</td>
+                      <td className="border-r border-gray-200 px-2 py-2 text-xs text-gray-600">
+                        {d.routeType === "international" ? "Intl" : "Dom"}
+                      </td>
+                      <td className="border-r border-gray-200 px-2 py-2 text-right font-mono text-xs text-gray-700">
+                        £{parseFloat(String(d.buyPrice || 0)).toFixed(2)}
+                      </td>
+                      <td className="border-r border-gray-200 px-2 py-2 text-right font-mono text-xs text-gray-700">
+                        £{parseFloat(String(d.sellPrice || 0)).toFixed(2)}
+                      </td>
+                      <td className="border-r border-gray-200 px-2 py-2 text-right font-mono text-xs text-gray-700">
+                        £{parseFloat(String(d.fuelSurcharge || 0)).toFixed(2)}
+                      </td>
+                      <td className="border-r border-gray-200 px-2 py-2 text-center text-xs">
+                        {d.billable === "yes" ? (
+                          <span className="font-semibold text-emerald-700">Y</span>
+                        ) : (
+                          <span className="text-gray-400">N</span>
+                        )}
+                      </td>
+                      <td
+                        className={`border-r border-gray-200 px-2 py-2 text-right font-mono text-xs font-semibold ${profitClass(
+                          parseFloat(String(d.profit || 0))
+                        )}`}
+                      >
+                        £{parseFloat(String(d.profit || 0)).toFixed(2)}
+                      </td>
+                      <td
+                        className={`border-r border-gray-200 px-2 py-2 text-right font-mono text-xs font-semibold ${marginClass(
+                          parseFloat(String(d.margin || 0))
+                        )}`}
+                      >
+                        {parseFloat(String(d.margin || 0)).toFixed(0)}%
+                      </td>
+                      <td className="border-r border-gray-200 px-2 py-2 text-center text-xs">
+                        {d.status !== "completed" ? (
+                          <span className="text-gray-300">—</span>
+                        ) : d.invoiceSent === "yes" ? (
+                          <span className="text-emerald-700">Y</span>
+                        ) : (
+                          <span className="text-amber-700">N</span>
+                        )}
+                      </td>
+                      <td className="border-r border-gray-200 px-2 py-2 text-center text-xs">
+                        {d.supplierInvoiceReceived === "yes" ? (
+                          <span className="text-emerald-700">Y</span>
+                        ) : (
+                          <span className="text-gray-400">N</span>
+                        )}
+                      </td>
+                      <td className="border-r border-gray-200 px-2 py-2 text-center text-xs">
+                        {d.podReceived === "yes" ? <span className="text-emerald-700">Y</span> : <span className="text-gray-400">N</span>}
+                      </td>
+                      <td className="border-r border-gray-200 px-2 py-2 text-center text-xs">
+                        {d.podSent === "yes" ? <span className="text-emerald-700">Y</span> : <span className="text-gray-400">N</span>}
+                      </td>
+                      <td className="max-w-[88px] truncate border-r border-gray-200 px-2 py-2 text-xs text-gray-700" title={d.hayleighPo}>
+                        {d.hayleighPo || "—"}
+                      </td>
+                      <td
+                        className="max-w-[120px] truncate border-r border-gray-200 px-2 py-2 text-xs text-gray-600"
+                        title={refBits || undefined}
+                      >
+                        {refBits || "—"}
+                      </td>
+                      <td className="border-r border-gray-200 px-2 py-2 text-xs text-gray-700">{payShown}</td>
+                      <td className="border-r border-gray-200 px-2 py-2 text-xs text-gray-700">{supShown}</td>
+                      {canDeleteJob && (
+                        <td className="px-1 py-2 text-center">
+                          <button
+                            type="button"
+                            title="Delete job permanently (Nik only)"
+                            className="inline-flex items-center justify-center rounded-lg border border-red-200 bg-white p-1 text-red-700 hover:bg-red-50"
+                            onClick={() => {
+                              const msg = `Permanently delete job ${d.jobNumber}? This cannot be undone.`;
+                              if (!window.confirm(msg)) return;
+                              setJobs((prev) => prev.filter((j) => j.id !== d.id));
+                              notifySuccess("Job deleted", { href: platformPath("/jobs") });
+                            }}
+                          >
+                            <Trash2 size={14} aria-hidden />
+                          </button>
+                        </td>
+                      )}
+                    </tr>
+                  );
+                })}
               </tbody>
               <tfoot>
                 <tr className="border-t-2 border-gray-400 bg-gray-100 font-semibold">
-                  <td className="sticky left-0 z-10 border-r border-gray-300 bg-gray-100 px-3 py-2.5 text-xs text-gray-700">
-                    TOTAL ({filtered.length} jobs)
+                  <td className="sticky left-0 z-10 border-r border-gray-300 bg-gray-100 px-2 py-2.5 text-xs text-gray-700">
+                    TOTAL ({filtered.length})
                   </td>
-                  <td colSpan={5} className="border-r border-gray-300" />
-                  <td className="border-r border-gray-300 px-3 py-2.5 text-right font-mono text-xs">
+                  <td colSpan={9} className="border-r border-gray-300" />
+                  <td className="border-r border-gray-300 px-2 py-2.5 text-right font-mono text-xs">
                     £{filtered.reduce((s, j) => s + parseFloat(String(j.buyPrice || 0)), 0).toFixed(2)}
                   </td>
-                  <td className="border-r border-gray-300 px-3 py-2.5 text-right font-mono text-xs">
+                  <td className="border-r border-gray-300 px-2 py-2.5 text-right font-mono text-xs">
                     £{filtered.reduce((s, j) => s + parseFloat(String(j.sellPrice || 0)), 0).toFixed(2)}
                   </td>
-                  <td className="border-r border-gray-300 px-3 py-2.5 text-right font-mono text-xs">
+                  <td className="border-r border-gray-300 px-2 py-2.5 text-right font-mono text-xs">
+                    £{filtered.reduce((s, j) => s + parseFloat(String(j.fuelSurcharge || 0)), 0).toFixed(2)}
+                  </td>
+                  <td className="border-r border-gray-300" />
+                  <td className="border-r border-gray-300 px-2 py-2.5 text-right font-mono text-xs">
                     £{filtered.reduce((s, j) => s + parseFloat(String(j.profit || 0)), 0).toFixed(2)}
                   </td>
-                  <td />
+                  <td className="border-r border-gray-300" />
+                  <td colSpan={8} className="border-r border-gray-300" />
+                  {canDeleteJob && <td />}
                 </tr>
               </tfoot>
             </table>

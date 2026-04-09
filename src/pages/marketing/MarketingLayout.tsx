@@ -1,17 +1,10 @@
-import { useState, type ReactNode } from "react";
-import { Link, NavLink, Outlet, useLocation } from "react-router-dom";
-import { Menu, X } from "lucide-react";
+import { type ReactNode } from "react";
+import { Link, Outlet, useLocation } from "react-router-dom";
 import { CompanyLogo } from "../../components/CompanyLogo";
-import { COMPANY_LEGAL_NAME, OFFICE_ENQUIRIES_EMAIL } from "../../lib/companyBrand";
-
-const nav = [
-  { to: "/", label: "Home", end: true },
-  { to: "/about", label: "About", end: false },
-  { to: "/contact", label: "Contact", end: false },
-];
+import { MarketingSiteHeader } from "../../components/marketing/MarketingSiteHeader";
+import { OFFICE_ENQUIRIES_EMAIL } from "../../lib/companyBrand";
 
 export function MarketingLayout({ children }: { children?: ReactNode }) {
-  const [open, setOpen] = useState(false);
   const { pathname } = useLocation();
   const isHome = pathname === "/";
   const body = children ?? <Outlet />;
@@ -25,97 +18,7 @@ export function MarketingLayout({ children }: { children?: ReactNode }) {
         Skip to Content
       </a>
 
-      <header className="sticky top-0 z-50 shadow-sm">
-        <div className="h-1 bg-ht-amber" aria-hidden />
-        <div className="border-b border-ht-border bg-white/95 backdrop-blur">
-        <div className="mx-auto flex max-w-6xl items-center justify-between gap-4 px-4 py-4 lg:px-6">
-          <Link to="/" className="flex items-center gap-3 text-ht-navy">
-            <CompanyLogo
-              className={
-                isHome
-                  ? "h-12 w-auto max-w-[220px] object-contain object-left sm:h-14 sm:max-w-[270px] lg:h-[4.25rem] lg:max-w-[300px]"
-                  : "h-9 w-auto max-w-[128px] object-contain object-left"
-              }
-              alt={COMPANY_LEGAL_NAME}
-            />
-            <span className="hidden text-sm font-semibold tracking-tight sm:inline lg:text-base">{COMPANY_LEGAL_NAME}</span>
-          </Link>
-
-          <nav className="hidden items-center gap-8 md:flex">
-            {nav.map((item) => (
-              <NavLink
-                key={item.to}
-                to={item.to}
-                end={item.end}
-                className={({ isActive }) =>
-                  `text-sm font-medium transition-colors ${isActive ? "text-ht-slate" : "text-slate-600 hover:text-ht-navy"}`
-                }
-              >
-                {item.label}
-              </NavLink>
-            ))}
-          </nav>
-
-          <div className="hidden items-center gap-3 md:flex">
-            <Link
-              to="/quote"
-              className="rounded-lg bg-ht-amber px-4 py-2 text-sm font-semibold text-white shadow-sm transition-colors hover:bg-ht-amber-dark"
-            >
-              Get a quote
-            </Link>
-            <Link
-              to="/login"
-              className="rounded-lg bg-ht-slate px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-ht-slate-dark"
-            >
-              Operations login
-            </Link>
-          </div>
-
-          <button
-            type="button"
-            className="rounded-lg p-2 md:hidden"
-            aria-label={open ? "Close menu" : "Open menu"}
-            onClick={() => setOpen((o) => !o)}
-          >
-            {open ? <X size={24} /> : <Menu size={24} />}
-          </button>
-        </div>
-
-        {open && (
-          <div className="border-t border-ht-border bg-white px-4 py-4 md:hidden">
-            <nav className="flex flex-col gap-3">
-              {nav.map((item) => (
-                <NavLink
-                  key={item.to}
-                  to={item.to}
-                  end={item.end}
-                  onClick={() => setOpen(false)}
-                  className={({ isActive }) =>
-                    `py-2 text-sm font-medium ${isActive ? "text-ht-slate" : "text-slate-600"}`
-                  }
-                >
-                  {item.label}
-                </NavLink>
-              ))}
-              <Link
-                to="/quote"
-                className="mt-2 rounded-lg bg-ht-amber py-2.5 text-center text-sm font-semibold text-white"
-                onClick={() => setOpen(false)}
-              >
-                Get a quote
-              </Link>
-              <Link
-                to="/login"
-                className="rounded-lg bg-ht-slate py-3 text-center text-sm font-semibold text-white"
-                onClick={() => setOpen(false)}
-              >
-                Operations login
-              </Link>
-            </nav>
-          </div>
-        )}
-        </div>
-      </header>
+      <MarketingSiteHeader />
 
       <main id="main">{body}</main>
 
@@ -165,8 +68,11 @@ export function MarketingLayout({ children }: { children?: ReactNode }) {
                 <Link to="/contact" className="hover:text-white">
                   Contact
                 </Link>
+                <Link to="/driver" className="hover:text-white">
+                  Driver sign-in
+                </Link>
                 <Link to="/login" className="hover:text-white">
-                  Operations platform
+                  Staff operations login
                 </Link>
               </div>
             </div>

@@ -12,6 +12,12 @@
   --color-ht-amber-dark: #b45309;
 }
 
+/* Leaflet custom driver markers */
+.fleet-driver-pin {
+  background: transparent !important;
+  border: none !important;
+}
+
 body {
   margin: 0;
   font-family: Inter, system-ui, sans-serif;

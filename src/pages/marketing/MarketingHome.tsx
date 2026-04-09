@@ -1,5 +1,5 @@
 import { Link } from "react-router-dom";
-import { ArrowRight, MapPin, Shield, Truck } from "lucide-react";
+import { ArrowRight, MapPin, Navigation, Shield, Truck } from "lucide-react";
 import { FleetLiverySection } from "../../components/marketing/FleetLiverySection";
 
 const heroImg =
@@ -32,7 +32,7 @@ export default function MarketingHome() {
             Hayleigh Transport provides professional haulage, distribution and logistics support — from collection to
             delivery, with the accountability you expect from an established operator.
           </p>
-          <div className="mt-10 flex flex-wrap gap-4">
+          <div className="mt-10 flex flex-wrap gap-3">
             <Link
               to="/contact"
               className="inline-flex items-center gap-2 rounded-lg bg-ht-amber px-6 py-3 text-sm font-semibold text-white shadow-lg shadow-black/20 transition hover:bg-ht-amber-dark"
@@ -46,11 +46,33 @@ export default function MarketingHome() {
             >
               Request a quote
             </Link>
+          </div>
+          <div className="mt-8 max-w-2xl rounded-xl border border-white/20 bg-white/5 p-4 backdrop-blur-sm sm:p-5">
+            <p className="text-xs font-semibold uppercase tracking-wider text-emerald-300/95">Driver portal</p>
+            <p className="mt-2 text-sm leading-relaxed text-slate-200">
+              Use the button below with the <span className="text-white/95">name, vehicle registration and job number</span>{" "}
+              the office has given you. You will only see <span className="text-white/95">your own jobs</span> — not the
+              rest of the operations system.
+            </p>
+            <p className="mt-2 text-sm leading-relaxed text-slate-300">
+              You can choose to share your live location so planners can see you on the map; that is always optional.{" "}
+              <span className="font-medium text-white">Office and admin staff use a different login</span> on this site.
+            </p>
+            <Link
+              to="/driver"
+              className="mt-4 inline-flex items-center gap-2 rounded-lg bg-emerald-600 px-5 py-2.5 text-sm font-semibold text-white shadow-md transition hover:bg-emerald-500"
+            >
+              <Navigation size={18} aria-hidden />
+              Driver sign-in
+            </Link>
+          </div>
+          <div className="mt-6 flex flex-wrap items-center gap-3 border-t border-white/10 pt-6">
+            <span className="text-xs font-medium uppercase tracking-wider text-slate-500">Office &amp; planners</span>
             <Link
               to="/login"
-              className="inline-flex items-center gap-2 rounded-lg border border-white/20 px-6 py-3 text-sm font-medium text-slate-200 transition hover:border-white/40 hover:text-white"
+              className="inline-flex items-center gap-2 rounded-lg border border-white/25 bg-ht-slate/80 px-5 py-2.5 text-sm font-semibold text-white transition hover:border-white/40 hover:bg-ht-slate"
             >
-              Operations platform
+              Staff / operations login
             </Link>
           </div>
         </div>

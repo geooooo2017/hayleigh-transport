@@ -1,10 +1,13 @@
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { Link } from "react-router-dom";
-import { toast } from "sonner";
+import { notifyError, notifySuccess } from "../lib/platformNotify";
 import { Check, ChevronRight, Truck } from "lucide-react";
 import { CompanyLogo } from "../components/CompanyLogo";
+import { MissingFieldLegend, ReqStar, WhyThisSection } from "../components/FormGuidance";
 import { Btn, Card } from "../components/Layout";
 import { mailtoOffice, OFFICE_ENQUIRIES_EMAIL } from "../lib/companyBrand";
+import { QUOTE_REQ, QUOTE_WHY } from "../lib/fieldRequirementCopy";
+import { looksLikeEmail } from "../lib/podMailto";
 
 type QuoteForm = {
   serviceType: string;
@@ -58,7 +61,42 @@ export default function QuotePage() {
 
   const set = (k: keyof QuoteForm, v: string) => setForm((f) => ({ ...f, [k]: v }));
 
+  const quoteMiss1 = useMemo(
+    () => ({
+      service: !form.serviceType,
+      cPc: !form.collectionPostcode.trim(),
+      dPc: !form.deliveryPostcode.trim(),
+      cDate: !form.collectionDate,
+      dDate: !form.deliveryDate,
+      vehicle: !form.vehicleType,
+    }),
+    [
+      form.serviceType,
+      form.collectionPostcode,
+      form.deliveryPostcode,
+      form.collectionDate,
+      form.deliveryDate,
+      form.vehicleType,
+    ]
+  );
+
+  const quoteMiss2 = useMemo(
+    () => ({
+      company: !form.companyName.trim(),
+      name: !form.customerName.trim(),
+      email: !looksLikeEmail(form.customerEmail),
+      phone: !form.customerPhone.trim(),
+    }),
+    [form.companyName, form.customerName, form.customerEmail, form.customerPhone]
+  );
+
   const calc = () => {
+    if (!form.companyName.trim() || !form.customerName.trim() || !looksLikeEmail(form.customerEmail) || !form.customerPhone.trim()) {
+      notifyError("Complete your contact details", {
+        description: "Company, contact name, a valid email, and phone are required to generate a quote reference.",
+      });
+      return;
+    }
     const dist = Math.floor(Math.random() * 300) + 50;
     const m = form.serviceType === "international" ? 1.5 : 0.85;
     const v =
@@ -76,11 +114,27 @@ export default function QuotePage() {
       quoteRef: ref,
     });
     setStep(3);
+    notifySuccess(`Quote ${ref} generated`, {
+      description: `Indicative total £${total.toFixed(2)} (incl. fuel surcharge)`,
+      href: "/quote",
+    });
   };
 
   const next1 = () => {
     if (!form.serviceType) {
-      toast.error("Select a service type");
+      notifyError("Select a service type");
+      return;
+    }
+    if (!form.collectionPostcode.trim() || !form.deliveryPostcode.trim()) {
+      notifyError("Enter collection and delivery postcodes");
+      return;
+    }
+    if (!form.collectionDate || !form.deliveryDate) {
+      notifyError("Enter collection and delivery dates");
+      return;
+    }
+    if (!form.vehicleType) {
+      notifyError("Select a vehicle type");
       return;
     }
     setStep(2);
@@ -119,6 +173,9 @@ export default function QuotePage() {
       </div>
 
       <div className="mx-auto max-w-4xl px-6 py-12">
+        <WhyThisSection>{QUOTE_WHY}</WhyThisSection>
+        <MissingFieldLegend />
+
         <div className="mb-12 flex items-center justify-center gap-4">
           {[
             { n: 1, l: "Journey Details" },
@@ -148,7 +205,10 @@ export default function QuotePage() {
             </div>
             <div className="space-y-6 p-6">
               <div>
-                <p className="mb-3 block text-base font-semibold">Service Type</p>
+                <p className="mb-3 block text-base font-semibold">
+                  Service Type
+                  <ReqStar show={quoteMiss1.service} why={QUOTE_REQ.serviceType} />
+                </p>
                 <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
                   <button
                     type="button"
@@ -180,7 +240,10 @@ export default function QuotePage() {
               </div>
               <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
                 <div>
-                  <label className="mb-1 block text-sm font-medium">Collection postcode</label>
+                  <label className="mb-1 block text-sm font-medium">
+                    Collection postcode
+                    <ReqStar show={quoteMiss1.cPc} why={QUOTE_REQ.collectionPostcode} />
+                  </label>
                   <input
                     className="w-full rounded-lg border border-ht-border px-3 py-2 outline-none focus:ring-2 focus:ring-ht-slate/20"
                     value={form.collectionPostcode}
@@ -188,7 +251,10 @@ export default function QuotePage() {
                   />
                 </div>
                 <div>
-                  <label className="mb-1 block text-sm font-medium">Delivery postcode</label>
+                  <label className="mb-1 block text-sm font-medium">
+                    Delivery postcode
+                    <ReqStar show={quoteMiss1.dPc} why={QUOTE_REQ.deliveryPostcode} />
+                  </label>
                   <input
                     className="w-full rounded-lg border border-ht-border px-3 py-2 outline-none focus:ring-2 focus:ring-ht-slate/20"
                     value={form.deliveryPostcode}
@@ -196,7 +262,10 @@ export default function QuotePage() {
                   />
                 </div>
                 <div>
-                  <label className="mb-1 block text-sm font-medium">Collection date</label>
+                  <label className="mb-1 block text-sm font-medium">
+                    Collection date
+                    <ReqStar show={quoteMiss1.cDate} why={QUOTE_REQ.collectionDate} />
+                  </label>
                   <input
                     type="date"
                     className="w-full rounded-lg border border-ht-border px-3 py-2 outline-none focus:ring-2 focus:ring-ht-slate/20"
@@ -205,7 +274,10 @@ export default function QuotePage() {
                   />
                 </div>
                 <div>
-                  <label className="mb-1 block text-sm font-medium">Delivery date</label>
+                  <label className="mb-1 block text-sm font-medium">
+                    Delivery date
+                    <ReqStar show={quoteMiss1.dDate} why={QUOTE_REQ.deliveryDate} />
+                  </label>
                   <input
                     type="date"
                     className="w-full rounded-lg border border-ht-border px-3 py-2 outline-none focus:ring-2 focus:ring-ht-slate/20"
@@ -215,7 +287,10 @@ export default function QuotePage() {
                 </div>
               </div>
               <div>
-                <label className="mb-1 block text-sm font-medium">Vehicle type</label>
+                <label className="mb-1 block text-sm font-medium">
+                  Vehicle type
+                  <ReqStar show={quoteMiss1.vehicle} why={QUOTE_REQ.vehicleType} />
+                </label>
                 <select
                   className="w-full rounded-lg border border-ht-border px-3 py-2 outline-none focus:ring-2 focus:ring-ht-slate/20"
                   value={form.vehicleType}
@@ -242,14 +317,17 @@ export default function QuotePage() {
             <div className="space-y-4 p-6">
               {(
                 [
-                  ["companyName", "Company name"],
-                  ["customerName", "Contact name"],
-                  ["customerEmail", "Email"],
-                  ["customerPhone", "Phone"],
+                  ["companyName", "Company name", quoteMiss2.company, QUOTE_REQ.companyName],
+                  ["customerName", "Contact name", quoteMiss2.name, QUOTE_REQ.contactName],
+                  ["customerEmail", "Email", quoteMiss2.email, QUOTE_REQ.contactEmail],
+                  ["customerPhone", "Phone", quoteMiss2.phone, QUOTE_REQ.contactPhone],
                 ] as const
-              ).map(([k, label]) => (
+              ).map(([k, label, miss, why]) => (
                 <div key={k}>
-                  <label className="mb-1 block text-sm font-medium">{label}</label>
+                  <label className="mb-1 block text-sm font-medium">
+                    {label}
+                    <ReqStar show={miss} why={why} />
+                  </label>
                   <input
                     className="w-full rounded-lg border border-ht-border px-3 py-2 outline-none focus:ring-2 focus:ring-ht-slate/20"
                     value={form[k]}
@@ -325,8 +403,9 @@ export default function QuotePage() {
                       .filter(Boolean)
                       .join("\n");
                     window.location.assign(mailtoOffice(`Quote enquiry ${result.quoteRef}`, body));
-                    toast.success("Opening your email app", {
+                    notifySuccess("Opening your email app", {
                       description: `Send the message to ${OFFICE_ENQUIRIES_EMAIL} to submit your request.`,
+                      href: "/quote",
                     });
                   }}
                 >
@@ -348,8 +427,9 @@ export default function QuotePage() {
                       `Phone: ${form.customerPhone}`,
                     ].join("\n");
                     window.location.assign(mailtoOffice(`Booking enquiry ${result.quoteRef}`, body));
-                    toast.success("Opening your email app", {
+                    notifySuccess("Opening your email app", {
                       description: `Send the message to ${OFFICE_ENQUIRIES_EMAIL} to confirm your booking.`,
+                      href: "/quote",
                     });
                   }}
                 >

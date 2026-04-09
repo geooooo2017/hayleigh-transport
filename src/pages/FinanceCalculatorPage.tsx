@@ -1,6 +1,8 @@
 import { useMemo, useState } from "react";
 import { Calculator } from "lucide-react";
-import { Card } from "../components/Layout";
+import { Btn, Card } from "../components/Layout";
+import { notifyError, notifySuccess } from "../lib/platformNotify";
+import { platformPath } from "../routes/paths";
 
 export default function FinanceCalculatorPage() {
   const [distance, setDistance] = useState("120");
@@ -84,6 +86,31 @@ export default function FinanceCalculatorPage() {
             <span>£{result.total.toFixed(2)}</span>
           </div>
         </div>
+        <Btn
+          type="button"
+          variant="outline"
+          className="mt-4"
+          onClick={async () => {
+            const text = [
+              "Finance calculator (ex VAT)",
+              `Distance: ${distance} mi × £${rate}/mi → base £${result.base.toFixed(2)}`,
+              `Fuel ${fuelPct}% → £${result.fuel.toFixed(2)}`,
+              `Extras £${extras}`,
+              `Total £${result.total.toFixed(2)}`,
+            ].join("\n");
+            try {
+              await navigator.clipboard.writeText(text);
+              notifySuccess("Calculator summary copied", {
+                description: "Paste into a job note or email.",
+                href: platformPath("/finance-calculator"),
+              });
+            } catch {
+              notifyError("Copy blocked", { description: "Your browser did not allow clipboard access." });
+            }
+          }}
+        >
+          Copy summary
+        </Btn>
       </Card>
     </div>
   );

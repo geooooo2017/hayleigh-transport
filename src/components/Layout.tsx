@@ -1,8 +1,7 @@
 import { useState, type ReactNode } from "react";
-import { Link, NavLink, Outlet, useNavigate } from "react-router-dom";
+import { Link, NavLink, Outlet, useLocation, useNavigate } from "react-router-dom";
 import {
   BarChart3,
-  Bell,
   Calculator,
   ChevronRight,
   ClipboardList,
@@ -12,7 +11,6 @@ import {
   MapPin,
   Menu,
   Receipt,
-  Search,
   Settings,
   Truck,
   Users,
@@ -20,6 +18,9 @@ import {
   X,
 } from "lucide-react";
 import { CompanyLogo } from "./CompanyLogo";
+import { HeaderSearch } from "./HeaderSearch";
+import { NotificationsDropdown } from "./NotificationsDropdown";
+import { RouteErrorBoundary } from "./RouteErrorBoundary";
 import { useAuth } from "../context/AuthContext";
 import { useJobsSync } from "../context/JobsContext";
 import { PLATFORM_BASE, platformPath } from "../routes/paths";
@@ -39,9 +40,10 @@ const nav = [
   { name: "Settings", path: platformPath("/settings"), icon: Settings },
 ];
 
-function initials(name: string) {
-  return name
-    .split(" ")
+function initials(name: string | undefined) {
+  const parts = (name ?? "").trim().split(/\s+/).filter(Boolean);
+  if (parts.length === 0) return "?";
+  return parts
     .map((p) => p[0])
     .join("")
     .toUpperCase()
@@ -53,6 +55,7 @@ export function Layout() {
   const { user, logout } = useAuth();
   const { syncMode, cloudLoading, cloudError } = useJobsSync();
   const navigate = useNavigate();
+  const { pathname } = useLocation();
 
   const doLogout = () => {
     logout();
@@ -149,19 +152,11 @@ export function Layout() {
           >
             <Menu size={24} />
           </button>
-          <div className="relative hidden max-w-xl flex-1 md:flex">
-            <Search className="pointer-events-none absolute left-3 top-1/2 h-5 w-5 -translate-y-1/2 text-gray-400" />
-            <input
-              type="search"
-              placeholder="Search jobs, customers, drivers..."
-              className="h-10 w-full rounded-lg border border-ht-border bg-ht-canvas py-2 pl-10 pr-4 text-sm outline-none focus:ring-2 focus:ring-ht-slate/20"
-            />
+          <div className="mx-2 flex min-w-0 flex-1 md:mx-4">
+            <HeaderSearch />
           </div>
-          <div className="ml-auto flex items-center gap-2 lg:gap-4">
-            <button type="button" className="relative rounded-lg p-2 hover:bg-gray-100">
-              <Bell size={20} className="text-gray-600" />
-              <span className="absolute right-1 top-1 h-2 w-2 rounded-full bg-red-500" />
-            </button>
+          <div className="ml-auto flex shrink-0 items-center gap-2 lg:gap-4">
+            <NotificationsDropdown />
             <div className="hidden items-center gap-3 lg:flex">
               <div className="hidden text-right lg:block">
                 <div className="text-sm font-medium">{user?.name ?? "Guest"}</div>
@@ -207,7 +202,9 @@ export function Layout() {
         className={`min-h-screen lg:ml-64 ${syncMode === "cloud" ? "pt-[7rem]" : "pt-16"}`}
       >
         <div className="p-4 lg:p-6">
-          <Outlet />
+          <RouteErrorBoundary key={pathname}>
+            <Outlet />
+          </RouteErrorBoundary>
         </div>
       </main>
     </div>

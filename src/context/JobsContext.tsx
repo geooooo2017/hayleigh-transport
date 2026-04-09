@@ -9,6 +9,7 @@ import {
   type Dispatch,
   type SetStateAction,
 } from "react";
+import { migrateJobs } from "../lib/jobAddress";
 import { getSupabase } from "../lib/supabase";
 import type { Job } from "../types";
 
@@ -19,7 +20,7 @@ function readLocalJobs(): Job[] {
     const raw = localStorage.getItem(LOCAL_KEY);
     if (raw == null) return [];
     const parsed = JSON.parse(raw) as unknown;
-    return Array.isArray(parsed) ? (parsed as Job[]) : [];
+    return migrateJobs(Array.isArray(parsed) ? (parsed as Job[]) : []);
   } catch {
     return [];
   }
@@ -98,14 +99,14 @@ export function JobsProvider({ children }: { children: React.ReactNode }) {
           if (insErr && /duplicate|unique/i.test(insErr.message)) {
             const { data: row, error: fetchErr } = await supabase.from("jobs_list").select("jobs").eq("id", 1).single();
             if (fetchErr) throw fetchErr;
-            if (!cancelled && row?.jobs) setJobsState(row.jobs as Job[]);
+            if (!cancelled && row?.jobs) setJobsState(migrateJobs(row.jobs as Job[]));
             return;
           }
           if (!cancelled) setJobsState(initial);
           return;
         }
 
-        const serverJobs = (data.jobs as Job[]) ?? [];
+        const serverJobs = migrateJobs((data.jobs as Job[]) ?? []);
         if (serverJobs.length === 0) {
           const local = readLocalJobs();
           if (local.length > 0) {
@@ -134,7 +135,11 @@ export function JobsProvider({ children }: { children: React.ReactNode }) {
       if (cancelled || error || !data?.jobs) return;
       const remote = data.jobs as Job[];
       if (JSON.stringify(remote) !== JSON.stringify(jobsRef.current)) {
-        setJobsState(remote);
+        try {
+          setJobsState(migrateJobs(remote));
+        } catch (e) {
+          console.error("[JobsProvider] poll migrate failed", e);
+        }
       }
     }, 5000);
 

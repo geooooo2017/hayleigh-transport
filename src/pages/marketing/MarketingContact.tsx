@@ -1,6 +1,6 @@
 import { Link } from "react-router-dom";
 import { useState } from "react";
-import { toast } from "sonner";
+import { notifySuccess } from "../../lib/platformNotify";
 import { mailtoOffice, OFFICE_ENQUIRIES_EMAIL } from "../../lib/companyBrand";
 
 export default function MarketingContact() {
@@ -14,8 +14,9 @@ export default function MarketingContact() {
     const href = mailtoOffice(`Website enquiry from ${name}`, `Name: ${name}\nReply-to: ${fromEmail}\n\n${message}`);
     window.location.assign(href);
     setSent(true);
-    toast.success("Opening your email app", {
+    notifySuccess("Opening your email app", {
       description: `Send the message to ${OFFICE_ENQUIRIES_EMAIL} to complete your enquiry.`,
+      href: "/contact",
     });
   };
 

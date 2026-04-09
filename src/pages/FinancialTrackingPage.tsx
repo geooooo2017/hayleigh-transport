@@ -1,22 +1,33 @@
 import { Download } from "lucide-react";
-import { toast } from "sonner";
+import { notifyMessage, notifySuccess } from "../lib/platformNotify";
+import { platformPath } from "../routes/paths";
 import { financeLedgerSeed } from "../data/financeLedger";
 import { Btn, Card } from "../components/Layout";
+import { useAuth } from "../context/AuthContext";
 import { prependBrandedCsvPreamble } from "../lib/companyBrand";
+import { getUserCompanyDetails } from "../lib/userCompanyProfile";
 
 export default function FinancialTrackingPage() {
+  const { user } = useAuth();
   const rows = financeLedgerSeed;
 
   const exportCsv = () => {
     if (rows.length === 0) {
-      toast.message("Nothing to export", { description: "Add ledger data first." });
+      notifyMessage("Nothing to export", {
+        description: "Add ledger data first.",
+        href: platformPath("/financial-tracking"),
+      });
       return;
     }
     const headers = ["Job", "Customer", "Quoted", "Actual", "Status", "Payment"];
     const lines = rows.map((r) =>
       [r.jobNumber, r.customer, r.quoted, r.actual, r.status, r.paymentStatus].join(",")
     );
-    const csv = [...prependBrandedCsvPreamble(headers), headers.join(","), ...lines].join("\n");
+    const csv = [
+      ...prependBrandedCsvPreamble(headers, getUserCompanyDetails(user?.id), user?.name),
+      headers.join(","),
+      ...lines,
+    ].join("\n");
     const blob = new Blob([csv], { type: "text/csv" });
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
@@ -24,7 +35,7 @@ export default function FinancialTrackingPage() {
     a.download = `job-finance-${Date.now()}.csv`;
     a.click();
     URL.revokeObjectURL(url);
-    toast.success("Job details exported");
+    notifySuccess("Job details exported", { href: platformPath("/financial-tracking") });
   };
 
   return (

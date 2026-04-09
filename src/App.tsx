@@ -1,5 +1,6 @@
 import { Navigate, Route, Routes } from "react-router-dom";
 import { Layout } from "./components/Layout";
+import { RouteErrorBoundary } from "./components/RouteErrorBoundary";
 import { RequireAuth } from "./components/RequireAuth";
 import { JobsProvider } from "./context/JobsContext";
 import { MarketingLayout } from "./pages/marketing/MarketingLayout";
@@ -22,12 +23,19 @@ import MonthlyReportPage from "./pages/MonthlyReportPage";
 import QuotePage from "./pages/QuotePage";
 import SettingsPage from "./pages/SettingsPage";
 import StatisticsPage from "./pages/StatisticsPage";
+import DriverAppPage from "./pages/driver/DriverAppPage";
+import { DriverAreaLayout } from "./pages/driver/DriverAreaLayout";
+import DriverLoginPage from "./pages/driver/DriverLoginPage";
 
 export default function App() {
   return (
     <Routes>
       <Route path="/welcome" element={<Navigate to="/login" replace />} />
       <Route path="/login" element={<LoginPage />} />
+      <Route element={<DriverAreaLayout />}>
+        <Route path="/driver" element={<DriverLoginPage />} />
+        <Route path="/driver/app" element={<DriverAppPage />} />
+      </Route>
       <Route path="/quote" element={<QuotePage />} />
 
       <Route path="/" element={<MarketingLayout />}>
@@ -40,9 +48,11 @@ export default function App() {
         path="/platform"
         element={
           <RequireAuth>
-            <JobsProvider>
-              <Layout />
-            </JobsProvider>
+            <RouteErrorBoundary>
+              <JobsProvider>
+                <Layout />
+              </JobsProvider>
+            </RouteErrorBoundary>
           </RequireAuth>
         }
       >

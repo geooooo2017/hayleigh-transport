@@ -1,8 +1,11 @@
-import { useEffect, useState } from "react";
+import { useMemo, useState } from "react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
 import { AlertCircle, Calculator, Home, Info, Mail } from "lucide-react";
 import { CompanyLogo } from "../components/CompanyLogo";
+import { MissingFieldLegend, ReqStar, WhyThisSection } from "../components/FormGuidance";
+import { STAFF_LOGIN_WHY, STAFF_REQ } from "../lib/fieldRequirementCopy";
 import { useAuth } from "../context/AuthContext";
+import { recordActivityOnly } from "../lib/platformNotify";
 import { PLATFORM_BASE } from "../routes/paths";
 
 const publicNav = [
@@ -28,15 +31,19 @@ function destinationAfterAuth(location: ReturnType<typeof useLocation>) {
 export default function LoginPage() {
   const navigate = useNavigate();
   const location = useLocation();
-  const { login, user } = useAuth();
+  const { login, logout, user } = useAuth();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
   const [selectedQuick, setSelectedQuick] = useState<string | null>(null);
 
-  useEffect(() => {
-    if (user) navigate(destinationAfterAuth(location), { replace: true });
-  }, [user, navigate, location]);
+  const loginMiss = useMemo(
+    () => ({
+      email: !email.trim(),
+      password: !password,
+    }),
+    [email, password]
+  );
 
   const quickFill = (em: string, name: string) => {
     setEmail(em);
@@ -47,8 +54,23 @@ export default function LoginPage() {
   const onSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     setError("");
-    if (login(email, password)) navigate(destinationAfterAuth(location), { replace: true });
-    else setError("Invalid email or password. Please try again.");
+    if (!email.trim()) {
+      setError("Enter your email address.");
+      return;
+    }
+    if (!password) {
+      setError("Enter your password. Quick login only fills email.");
+      return;
+    }
+    if (login(email, password)) {
+      const dest = destinationAfterAuth(location);
+      try {
+        recordActivityOnly("Signed in to operations", email.trim(), dest, "success");
+      } catch {
+        /* never block navigation */
+      }
+      navigate(dest, { replace: true });
+    } else setError("Invalid email or password. Please try again.");
   };
 
   return (
@@ -88,16 +110,59 @@ export default function LoginPage() {
               <CompanyLogo className="h-12 w-auto max-w-[200px] object-contain lg:h-14" />
             </div>
             <h1 className="text-center text-xl font-semibold text-gray-900 lg:text-2xl">
-              Transport Operations Platform
+              Staff — operations login
             </h1>
             <p className="mt-2 text-center text-xs text-gray-500 lg:text-sm">
-              Manage jobs, scheduling and transport operations in one place
+              Office and planners only. Drivers use a separate page.
+            </p>
+            <p className="mt-3 text-center text-xs">
+              <Link to="/driver" className="font-medium text-ht-slate underline decoration-ht-slate/30 hover:decoration-ht-slate">
+                Driver sign-in (jobs &amp; optional GPS)
+              </Link>
+              {" · "}
+              <Link to="/" className="text-gray-600 underline decoration-gray-300 hover:text-gray-900">
+                Company homepage
+              </Link>
             </p>
           </div>
 
+          {user && (
+            <div className="mb-6 rounded-lg border border-emerald-200 bg-emerald-50 p-4">
+              <p className="text-sm font-medium text-emerald-950">
+                Already signed in as {user.name} ({user.email})
+              </p>
+              <p className="mt-1 text-xs text-emerald-900/85">
+                Continue to operations, or sign out to use a different account.
+              </p>
+              <div className="mt-3 flex flex-wrap gap-2">
+                <Link
+                  to={destinationAfterAuth(location)}
+                  className="inline-flex items-center justify-center rounded-lg bg-ht-slate px-4 py-2 text-sm font-medium text-white hover:bg-ht-slate-dark"
+                >
+                  Continue to operations
+                </Link>
+                <button
+                  type="button"
+                  onClick={() => {
+                    logout();
+                    setEmail("");
+                    setPassword("");
+                    setSelectedQuick(null);
+                    setError("");
+                  }}
+                  className="inline-flex items-center justify-center rounded-lg border border-emerald-300 bg-white px-4 py-2 text-sm font-medium text-emerald-900 hover:bg-emerald-100"
+                >
+                  Sign out
+                </button>
+              </div>
+            </div>
+          )}
+
           <div className="mb-6 rounded-lg border border-ht-border bg-ht-canvas p-3 lg:p-4">
             <h3 className="mb-2 text-xs font-semibold text-ht-navy lg:text-sm">Quick login</h3>
-            <p className="mb-3 text-xs text-slate-600">Select a user to fill email.</p>
+            <p className="mb-3 text-xs text-slate-600">
+              Select a user to fill email — you still need to enter the password below.
+            </p>
             <div className="grid grid-cols-3 gap-2">
               {(
                 [
@@ -130,16 +195,20 @@ export default function LoginPage() {
             </div>
           )}
 
-          <form onSubmit={onSubmit} className="space-y-4">
+          <MissingFieldLegend />
+
+          <WhyThisSection>{STAFF_LOGIN_WHY}</WhyThisSection>
+
+          <form noValidate onSubmit={onSubmit} className="space-y-4">
             <div>
               <label htmlFor="email" className="text-sm font-medium text-gray-900">
                 Email
+                <ReqStar show={loginMiss.email} why={STAFF_REQ.email} />
               </label>
               <input
                 id="email"
                 type="email"
                 name="email"
-                required
                 autoComplete="username"
                 placeholder="your.email@company.com"
                 value={email}
@@ -150,12 +219,12 @@ export default function LoginPage() {
             <div>
               <label htmlFor="password" className="text-sm font-medium text-gray-900">
                 Password
+                <ReqStar show={loginMiss.password} why={STAFF_REQ.password} />
               </label>
               <input
                 id="password"
                 type="password"
                 name="password"
-                required
                 autoComplete="current-password"
                 placeholder="Enter your password"
                 value={password}

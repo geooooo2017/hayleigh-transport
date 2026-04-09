@@ -1,7 +1,11 @@
-import { useState } from "react";
-import { toast } from "sonner";
+import { useEffect, useMemo, useState } from "react";
+import { useSearchParams } from "react-router-dom";
+import { notifySuccess } from "../lib/platformNotify";
+import { platformPath } from "../routes/paths";
 import { Plus, Search, Trash2 } from "lucide-react";
+import { useJobs } from "../context/JobsContext";
 import { useLocalStorage } from "../hooks/useLocalStorage";
+import { jobNetExVat } from "../lib/jobNetAmount";
 import type { Customer } from "../types";
 import { Btn, Card } from "../components/Layout";
 
@@ -23,7 +27,13 @@ const empty: Omit<Customer, "id"> = {
 
 export default function CustomersPage() {
   const [customers, setCustomers] = useLocalStorage<Customer[]>("customers", []);
-  const [q, setQ] = useState("");
+  const [jobs] = useJobs();
+  const [searchParams] = useSearchParams();
+  const [q, setQ] = useState(() => searchParams.get("q") ?? "");
+
+  useEffect(() => {
+    setQ(searchParams.get("q") ?? "");
+  }, [searchParams]);
   const [open, setOpen] = useState(false);
   const [editing, setEditing] = useState<Customer | null>(null);
   const [form, setForm] = useState(empty);
@@ -72,10 +82,10 @@ export default function CustomersPage() {
     };
     if (editing) {
       setCustomers((list) => list.map((c) => (c.id === row.id ? row : c)));
-      toast.success("Customer updated");
+      notifySuccess("Customer updated", { href: platformPath("/customers") });
     } else {
       setCustomers((list) => [...list, row]);
-      toast.success("Customer added");
+      notifySuccess("Customer added", { href: platformPath("/customers") });
     }
     setOpen(false);
   };
@@ -83,11 +93,18 @@ export default function CustomersPage() {
   const remove = (c: Customer) => {
     if (!confirm(`Delete ${c.name}?`)) return;
     setCustomers((list) => list.filter((x) => x.id !== c.id));
-    toast.success("Customer deleted");
+    notifySuccess("Customer deleted", { href: platformPath("/customers") });
   };
 
-  const totalRev = customers.reduce((s, c) => s + c.totalRevenue, 0);
+  /** Sum of sell + fuel + extras (ex VAT) across completed jobs — same basis as Customer Invoicing. */
+  const netFromCompletedJobs = useMemo(
+    () => jobs.filter((j) => j.status === "completed").reduce((s, j) => s + jobNetExVat(j), 0),
+    [jobs]
+  );
   const active = customers.filter((c) => c.status === "active").length;
+
+  const formatGbp = (n: number) =>
+    `£${n.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 
   return (
     <div className="space-y-6">
@@ -111,8 +128,9 @@ export default function CustomersPage() {
           <div className="text-3xl font-semibold">{active}</div>
         </Card>
         <Card className="p-6">
-          <div className="mb-2 text-sm text-gray-600">Total Revenue (demo field)</div>
-          <div className="text-3xl font-semibold">£{(totalRev / 1000).toFixed(0)}K</div>
+          <div className="mb-2 text-sm text-gray-600">Net from completed jobs (ex VAT)</div>
+          <div className="text-3xl font-semibold tabular-nums">{formatGbp(netFromCompletedJobs)}</div>
+          <p className="mt-2 text-xs text-gray-500">From your jobs list — sell + fuel surcharge + extras.</p>
         </Card>
       </div>
 

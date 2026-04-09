@@ -12,9 +12,11 @@ import type { ReactNode } from "react";
 import { Link } from "react-router-dom";
 import { ClipboardList, Plus } from "lucide-react";
 import { useLocalStorage } from "../hooks/useLocalStorage";
+import { formatAddressSummary } from "../lib/jobAddress";
 import { useJobs } from "../context/JobsContext";
 import type { Job } from "../types";
 import { Btn, Card } from "../components/Layout";
+import { notifyMessage } from "../lib/platformNotify";
 import { platformPath } from "../routes/paths";
 
 const WEEKDAYS = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday"] as const;
@@ -40,8 +42,10 @@ function JobCard({ job, fromBasket }: { job: Job; fromBasket?: boolean }) {
     >
       <div className="text-sm font-semibold text-gray-900">{job.jobNumber}</div>
       <div className="text-xs text-gray-600">{job.customerName}</div>
-      <div className="mt-2 line-clamp-2 text-xs text-gray-500">{job.collectionLocation}</div>
-      <div className="text-xs text-gray-500">→ {job.deliveryLocation}</div>
+      <div className="mt-2 line-clamp-2 text-xs text-gray-500">
+        {formatAddressSummary(job, "collection", 56) || "—"}
+      </div>
+      <div className="text-xs text-gray-500">→ {formatAddressSummary(job, "delivery", 56) || "—"}</div>
       <div className="mt-2 text-xs font-medium text-ht-slate">£{Number(job.sellPrice).toFixed(2)}</div>
     </div>
   );
@@ -97,20 +101,37 @@ export default function JobBoardPage() {
     const overId = e.over?.id != null ? String(e.over.id) : null;
     if (!overId) return;
 
-    setJobs((prev) =>
-      prev.map((j) => {
+    setJobs((prev) => {
+      const target = prev.find((j) => j.id === jobId);
+      if (!target) return prev;
+
+      let changed = false;
+      const next = prev.map((j) => {
         if (j.id !== jobId) return j;
         if (overId === "basket") {
-          const next = { ...j };
-          delete next.scheduledDay;
-          return next;
+          if (j.scheduledDay) changed = true;
+          const u = { ...j };
+          delete u.scheduledDay;
+          return u;
         }
         if ((WEEKDAYS as readonly string[]).includes(overId)) {
-          return { ...j, scheduledDay: overId, status: j.status === "completed" ? j.status : "scheduled" };
+          const nextStatus: Job["status"] = j.status === "completed" ? j.status : "scheduled";
+          if (j.scheduledDay !== overId || j.status !== nextStatus) changed = true;
+          return { ...j, scheduledDay: overId, status: nextStatus };
         }
         return j;
-      })
-    );
+      });
+
+      if (changed) {
+        const label =
+          overId === "basket" ? "moved to unscheduled" : (WEEKDAYS as readonly string[]).includes(overId) ? `scheduled ${overId}` : "updated";
+        notifyMessage("Job board updated", {
+          description: `${target.jobNumber} — ${label}`,
+          href: platformPath("/job-board"),
+        });
+      }
+      return next;
+    });
   };
 
   return (
