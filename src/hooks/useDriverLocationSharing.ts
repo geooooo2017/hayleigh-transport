@@ -3,7 +3,7 @@ import { deleteDriverPosition, upsertDriverPosition } from "../lib/driverPositio
 
 type Status = "idle" | "requesting" | "active" | "error";
 
-export function useDriverLocationSharing(driverName: string, vehicleRegistration: string) {
+export function useDriverLocationSharing(driverName: string, vehicleRegistration: string, jobIds: number[]) {
   const [status, setStatus] = useState<Status>("idle");
   const [lastError, setLastError] = useState<string | null>(null);
   const [lastUpdated, setLastUpdated] = useState<string | null>(null);
@@ -20,14 +20,14 @@ export function useDriverLocationSharing(driverName: string, vehicleRegistration
       clearInterval(intervalRef.current);
       intervalRef.current = null;
     }
-    await deleteDriverPosition(driverName, vehicleRegistration);
+    await deleteDriverPosition(vehicleRegistration, jobIds);
     setStatus("idle");
     setLastError(null);
     lastSentRef.current = null;
-  }, [driverName, vehicleRegistration]);
+  }, [vehicleRegistration, jobIds]);
 
   const pushPosition = useCallback(async (lat: number, lng: number) => {
-    const r = await upsertDriverPosition({ driverName, vehicleRegistration, lat, lng });
+    const r = await upsertDriverPosition({ driverName, vehicleRegistration, jobIds, lat, lng });
     if (!r.ok) {
       setLastError(r.error ?? "Could not save location");
       setStatus("error");
@@ -36,7 +36,7 @@ export function useDriverLocationSharing(driverName: string, vehicleRegistration
     setLastError(null);
     setLastUpdated(new Date().toISOString());
     setStatus("active");
-  }, [driverName, vehicleRegistration]);
+  }, [driverName, vehicleRegistration, jobIds]);
 
   const start = useCallback(() => {
     setLastError(null);

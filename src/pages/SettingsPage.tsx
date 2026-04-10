@@ -15,6 +15,7 @@ import {
   saveUserCompanyDetails,
   type UserCompanyDetails,
 } from "../lib/userCompanyProfile";
+import { TechnicalSupportLogCard } from "../components/TechnicalSupportLogCard";
 
 export default function SettingsPage() {
   const { user, changePassword } = useAuth();
@@ -92,7 +93,7 @@ export default function SettingsPage() {
     <div className="mx-auto max-w-2xl space-y-6">
       <div>
         <h1 className="text-2xl font-semibold text-gray-900 lg:text-3xl">Settings</h1>
-        <p className="mt-1 text-gray-500">Company profile, your password, and data rules</p>
+        <p className="mt-1 text-gray-500">Company profile, technical support log, your password, and data rules</p>
       </div>
 
       <MissingFieldLegend />
@@ -189,6 +190,8 @@ export default function SettingsPage() {
           <Btn type="submit">Save company details</Btn>
         </form>
       </Card>
+
+      <TechnicalSupportLogCard />
 
       <Card className="space-y-4 p-6">
         <h2 className="flex items-center gap-2 font-semibold">

@@ -1,7 +1,8 @@
 export const DRIVER_SESSION_KEY = "ht_driver_session";
 
 export type DriverSession = {
-  driverName: string;
+  /** Optional; shown on the live map — falls back to vehicle registration. */
+  driverName?: string;
   vehicleReg: string;
   jobIds: number[];
 };
@@ -10,10 +11,15 @@ export function readDriverSession(): DriverSession | null {
   try {
     const raw = sessionStorage.getItem(DRIVER_SESSION_KEY);
     if (!raw) return null;
-    const o = JSON.parse(raw) as DriverSession;
-    if (!o.driverName || !o.vehicleReg || !Array.isArray(o.jobIds)) return null;
-    if (o.jobIds.length === 0) return null;
-    return o;
+    const o = JSON.parse(raw) as DriverSession & { driverName?: string };
+    if (!o.vehicleReg || !Array.isArray(o.jobIds)) return null;
+    const jobIds = o.jobIds.filter((id) => typeof id === "number" && Number.isFinite(id));
+    if (jobIds.length === 0) return null;
+    return {
+      vehicleReg: String(o.vehicleReg).trim(),
+      jobIds,
+      ...(typeof o.driverName === "string" && o.driverName.trim() ? { driverName: o.driverName.trim() } : {}),
+    };
   } catch {
     return null;
   }

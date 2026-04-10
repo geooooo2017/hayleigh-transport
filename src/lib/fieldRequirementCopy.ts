@@ -4,7 +4,7 @@ export const JOB_GENERAL_WHY =
   "Correct customer, dates, and route type drive job numbers, booking PDFs, and how the job appears on the board and live map. Missing data causes wrong billing references and confused drivers.";
 
 export const JOB_CARRIER_WHY =
-  "Carrier and vehicle registration tie the job to who is actually hauling the load, match the driver app login, and appear on compliance paperwork and your jobs spreadsheet.";
+  "Carrier and vehicle registration tie the job to who is actually hauling the load, match the driver app sign-in (registration + job number), and appear on compliance paperwork and your jobs spreadsheet.";
 
 export const JOB_ADDRESS_WHY =
   "Full addresses, site phone numbers, and postcodes are required for drivers, maps, and ETA alerts. Collection and delivery contact names and emails are optional but help when you need to email the site directly.";
@@ -36,11 +36,10 @@ export const STAFF_REQ = {
 } as const;
 
 export const DRIVER_LOGIN_WHY =
-  "Name and registration must match the job in the office so only assigned drivers see their work and appear on live tracking.";
+  "Vehicle registration and job numbers must match the office job so drivers only see their runs; live tracking ties GPS to those same jobs.";
 
 export const DRIVER_REQ = {
-  name: "Must match the spelling on your assigned job so the gate shows only your work.",
-  vehicle: "Must match truck plates saved on the job for verification and live map labels.",
+  vehicle: "Must match truck plates saved on the job.",
   jobNumbers: "Office job numbers prove which runs you are on.",
 } as const;
 
@@ -91,7 +90,7 @@ export const REQ = {
   deliveryContact: "Site phone is required for unload coordination. Contact name and email are optional.",
   deliveryPostcode: "Postcode for map, ETAs, and address verification.",
   customerEmail: "Optional for POD mailto; add when you email POD or invoices from the job.",
-  assignedDriver: "Optional until you know who is driving; must match /driver sign-in when set.",
+  assignedDriver: "Optional office label; driver sign-in uses registration and job number, not this field.",
   legalName: "Registered name must match what you put on invoices to customers.",
   vatNumber: "VAT number is legally required on UK VAT invoices and many customer portals.",
   bibbyInvoiceValue:

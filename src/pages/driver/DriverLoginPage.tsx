@@ -21,11 +21,10 @@ export default function DriverLoginPage() {
 
   const driverMiss = useMemo(
     () => ({
-      name: !driverName.trim(),
       vehicle: !vehicle.trim(),
       jobs: !jobNumbers.trim(),
     }),
-    [driverName, vehicle, jobNumbers]
+    [vehicle, jobNumbers]
   );
 
   const onSubmit = async (e: React.FormEvent) => {
@@ -33,23 +32,23 @@ export default function DriverLoginPage() {
     setError("");
     setBusy(true);
     try {
-      const name = driverName.trim();
       const reg = vehicle.trim();
-      if (!name || !reg) {
-        setError("Enter your name and vehicle registration.");
+      if (!reg) {
+        setError("Enter your vehicle registration.");
         return;
       }
 
       const jobs = await fetchJobsSnapshot();
-      const result = verifyDriverJobs(jobs, name, reg, jobNumbers);
+      const result = verifyDriverJobs(jobs, reg, jobNumbers);
       if (!result.ok) {
         setError(result.message);
         return;
       }
+      const name = driverName.trim();
       writeDriverSession({
-        driverName: name,
         vehicleReg: reg,
         jobIds: result.jobs.map((j) => j.id),
+        ...(name ? { driverName: name } : {}),
       });
       navigate("/driver/app", { replace: true });
     } finally {
@@ -69,8 +68,8 @@ export default function DriverLoginPage() {
           </div>
           <h1 className="text-2xl font-semibold tracking-tight text-gray-900 sm:text-xl">Driver sign-in</h1>
           <p className="mt-3 text-base leading-relaxed text-gray-600 sm:mt-2 sm:text-sm">
-            Use the name, registration and job number from the office. You only see your jobs. You can turn on location
-            after sign-in if asked.
+            Enter the vehicle registration and job number(s) exactly as on the office job. You only see matching jobs. You can
+            turn on location after sign-in if asked.
           </p>
         </div>
 
@@ -89,24 +88,6 @@ export default function DriverLoginPage() {
               </div>
             )}
             <div>
-              <label htmlFor="driver-name" className="mb-2 block text-base font-medium text-gray-800 sm:mb-1 sm:text-sm">
-                Your name
-                <ReqStar show={driverMiss.name} why={DRIVER_REQ.name} />
-              </label>
-              <input
-                id="driver-name"
-                value={driverName}
-                onChange={(e) => setDriverName(e.target.value)}
-                className={fieldClass}
-                placeholder="e.g. Nik, Keir, Scott"
-                autoComplete="name"
-                enterKeyHint="next"
-                inputMode="text"
-                required
-              />
-              <p className="mt-2 text-sm text-gray-500 sm:text-xs">Same spelling as on your job in the office system.</p>
-            </div>
-            <div>
               <label htmlFor="driver-vrm" className="mb-2 block text-base font-medium text-gray-800 sm:mb-1 sm:text-sm">
                 Vehicle registration
                 <ReqStar show={driverMiss.vehicle} why={DRIVER_REQ.vehicle} />
@@ -124,6 +105,25 @@ export default function DriverLoginPage() {
                 required
               />
               <p className="mt-2 text-sm text-gray-500 sm:text-xs">Must match the truck plates saved on the job.</p>
+            </div>
+
+            <div>
+              <label htmlFor="driver-name" className="mb-2 block text-base font-medium text-gray-800 sm:mb-1 sm:text-sm">
+                Your name <span className="font-normal text-gray-500">(optional)</span>
+              </label>
+              <input
+                id="driver-name"
+                value={driverName}
+                onChange={(e) => setDriverName(e.target.value)}
+                className={fieldClass}
+                placeholder="Shown on the office map if you add it"
+                autoComplete="name"
+                enterKeyHint="next"
+                inputMode="text"
+              />
+              <p className="mt-2 text-sm text-gray-500 sm:text-xs">
+                If you leave this blank, the map uses your registration as the label.
+              </p>
             </div>
 
             <div>

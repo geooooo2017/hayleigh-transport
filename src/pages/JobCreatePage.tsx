@@ -35,6 +35,7 @@ export default function JobCreatePage() {
   const navigate = useNavigate();
   const { user } = useAuth();
   const [, setJobs] = useJobs();
+  const [creating, setCreating] = useState(false);
 
   const [routeType, setRouteType] = useState<"domestic" | "international">("domestic");
   const [collectionDate, setCollectionDate] = useState("");
@@ -187,6 +188,7 @@ export default function JobCreatePage() {
   const onSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!user) return;
+    if (creating) return;
     const cPc = collectionPostcode.trim();
     const dPc = deliveryPostcode.trim();
 
@@ -221,6 +223,8 @@ export default function JobCreatePage() {
       return;
     }
 
+    setCreating(true);
+    try {
     const jobNumber = allocateJobNumber(user, routeType);
 
     let collectionLat: number | undefined;
@@ -331,8 +335,9 @@ export default function JobCreatePage() {
         details: getUserCompanyDetails(user?.id),
         preparedBy: user.name,
       });
-      notifySuccess("Booking PDF saved", {
-        description: "Single PDF with boxed customer and supplier sections.",
+      notifySuccess("Booking PDFs saved", {
+        description:
+          "Two separate downloads (customer + office/carrier) — that is normal. Only send the customer file to your client.",
         href: platformPath(`/jobs/${job.id}`),
       });
     } catch {
@@ -342,6 +347,9 @@ export default function JobCreatePage() {
       });
     }
     navigate(platformPath("/jobs"));
+    } finally {
+      setCreating(false);
+    }
   };
 
   return (
@@ -852,7 +860,9 @@ export default function JobCreatePage() {
         </Card>
 
         <div className="mt-6 flex gap-3">
-          <Btn type="submit">Create Job</Btn>
+          <Btn type="submit" disabled={creating}>
+            {creating ? "Creating…" : "Create Job"}
+          </Btn>
           <Link to={platformPath("/jobs")}>
             <Btn type="button" variant="outline">
               Cancel

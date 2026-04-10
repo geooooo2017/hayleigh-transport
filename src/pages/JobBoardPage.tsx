@@ -13,6 +13,7 @@ import { Link } from "react-router-dom";
 import { ClipboardList, Plus } from "lucide-react";
 import { useLocalStorage } from "../hooks/useLocalStorage";
 import { formatJobCardDate } from "../lib/jobAddress";
+import { jobBoardHasIssues } from "../lib/jobBoardVisual";
 import { useJobs } from "../context/JobsContext";
 import type { Job } from "../types";
 import { Btn, Card } from "../components/Layout";
@@ -20,6 +21,21 @@ import { notifyMessage } from "../lib/platformNotify";
 import { platformPath } from "../routes/paths";
 
 const WEEKDAYS = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday"] as const;
+
+function jobBoardCardColors(job: Job): string {
+  if (jobBoardHasIssues(job)) {
+    return "border-red-400 bg-red-50/95 shadow-sm shadow-red-100/60";
+  }
+  switch (job.status) {
+    case "completed":
+      return "border-green-400 bg-green-50/95";
+    case "in-progress":
+      return "border-amber-500 bg-amber-50/95";
+    case "scheduled":
+    default:
+      return "border-yellow-400 bg-yellow-50/95";
+  }
+}
 
 function JobCard({ job, fromBasket }: { job: Job; fromBasket?: boolean }) {
   const { attributes, listeners, setNodeRef, transform, isDragging } = useDraggable({
@@ -36,7 +52,12 @@ function JobCard({ job, fromBasket }: { job: Job; fromBasket?: boolean }) {
       style={style}
       {...listeners}
       {...attributes}
-      className={`cursor-grab rounded-lg border border-gray-200 bg-white p-3 shadow-sm active:cursor-grabbing ${
+      title={
+        jobBoardHasIssues(job)
+          ? "Issues: complete addresses, core job fields, and sell price (ex VAT) on the job page"
+          : undefined
+      }
+      className={`cursor-grab rounded-lg border-2 p-3 shadow-sm active:cursor-grabbing ${jobBoardCardColors(job)} ${
         isDragging ? "opacity-70 ring-2 ring-ht-slate" : ""
       } ${fromBasket ? "border-dashed" : ""}`}
     >
@@ -152,6 +173,22 @@ export default function JobBoardPage() {
         <div>
           <h1 className="text-2xl font-semibold text-gray-900 lg:text-3xl">Job Board</h1>
           <p className="mt-1 text-sm text-gray-500 lg:text-base">Drag and drop jobs to schedule them</p>
+          <p className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-gray-600">
+            <span>
+              <span className="mr-1 inline-block h-2.5 w-2.5 rounded-sm border border-yellow-500 bg-yellow-100" /> Booked
+            </span>
+            <span>
+              <span className="mr-1 inline-block h-2.5 w-2.5 rounded-sm border border-amber-500 bg-amber-100" /> Collected
+              / in progress
+            </span>
+            <span>
+              <span className="mr-1 inline-block h-2.5 w-2.5 rounded-sm border border-green-500 bg-green-100" /> Delivered
+            </span>
+            <span>
+              <span className="mr-1 inline-block h-2.5 w-2.5 rounded-sm border border-red-400 bg-red-100" /> Issues (fix on
+              job)
+            </span>
+          </p>
         </div>
 
         {jobs.length === 0 && (

@@ -5,8 +5,14 @@ import markerIcon2x from "leaflet/dist/images/marker-icon-2x.png";
 import markerIcon from "leaflet/dist/images/marker-icon.png";
 import markerShadow from "leaflet/dist/images/marker-shadow.png";
 import type { Job } from "../types";
+import { jobBoardHasIssues, JOB_BOARD_MAP_COLORS } from "../lib/jobBoardVisual";
 import { collectionMapPoint, deliveryMapPoint } from "../lib/jobMapPosition";
+import { formatEtaSummary } from "../lib/drivingDirections";
+import { buildDriverPositionKey, normalizeVehiclePlate, type FleetDriverPin } from "../lib/driverPositionsApi";
+import type { FleetRoutesState } from "../hooks/useFleetDrivingRoutes";
 import { platformPath } from "../routes/paths";
+
+export type { FleetDriverPin };
 
 delete (L.Icon.Default.prototype as unknown as { _getIconUrl?: string })._getIconUrl;
 L.Icon.Default.mergeOptions({
@@ -24,40 +30,47 @@ function escapeHtml(s: string | undefined | null) {
     .replace(/"/g, "&quot;");
 }
 
-export type FleetDriverPin = {
-  driverName: string;
-  vehicleRegistration: string;
-  lat: number;
-  lng: number;
-  updatedAt: string;
-};
-
 type Props = {
   jobs: Job[];
   driverPins?: FleetDriverPin[];
+  /** When set, draws road geometry and ETA popups (from `useFleetDrivingRoutes`). */
+  fleetRoutes?: FleetRoutesState;
 };
 
 const driverDotIcon = L.divIcon({
   className: "fleet-driver-pin",
-  html: `<div style="width:16px;height:16px;border-radius:50%;background:#059669;border:3px solid #fff;box-shadow:0 1px 4px rgba(0,0,0,0.35)"></div>`,
+  html: `<div style="width:16px;height:16px;border-radius:50%;background:${JOB_BOARD_MAP_COLORS.driver};border:3px solid #fff;box-shadow:0 1px 4px rgba(0,0,0,0.35)"></div>`,
   iconSize: [16, 16],
   iconAnchor: [8, 8],
 });
 
-const deliveryDotIcon = L.divIcon({
-  className: "fleet-driver-pin",
-  html: `<div style="width:14px;height:14px;border-radius:50%;background:#ea580c;border:2px solid #fff;box-shadow:0 1px 4px rgba(0,0,0,0.35)"></div>`,
-  iconSize: [14, 14],
-  iconAnchor: [7, 7],
-});
-
-function driverPinKey(d: FleetDriverPin): string {
-  const name = (d.driverName ?? "").trim().toLowerCase();
-  const reg = (d.vehicleRegistration ?? "").replace(/\s+/g, "").toLowerCase();
-  return `${name}|${reg}`;
+function collectionJobIcon(hasIssue: boolean) {
+  const ring = hasIssue ? `0 0 0 3px ${JOB_BOARD_MAP_COLORS.issue}, ` : "";
+  return L.divIcon({
+    className: "fleet-job-pin-collection",
+    html: `<div style="width:14px;height:14px;border-radius:50%;background:${JOB_BOARD_MAP_COLORS.booked};border:2px solid #fff;box-shadow:${ring}0 1px 4px rgba(0,0,0,0.35)"></div>`,
+    iconSize: [14, 14],
+    iconAnchor: [7, 7],
+  });
 }
 
-export function FleetMap({ jobs, driverPins = [] }: Props) {
+function deliveryJobIcon(hasIssue: boolean) {
+  const ring = hasIssue ? `0 0 0 3px ${JOB_BOARD_MAP_COLORS.issue}, ` : "";
+  return L.divIcon({
+    className: "fleet-job-pin-delivery",
+    html: `<div style="width:14px;height:14px;border-radius:50%;background:${JOB_BOARD_MAP_COLORS.delivered};border:2px solid #fff;box-shadow:${ring}0 1px 4px rgba(0,0,0,0.35)"></div>`,
+    iconSize: [14, 14],
+    iconAnchor: [7, 7],
+  });
+}
+
+function driverPinKey(d: FleetDriverPin): string {
+  if (d.jobIds.length > 0) return buildDriverPositionKey(d.vehicleRegistration, d.jobIds);
+  const name = (d.driverName ?? "").trim().toLowerCase().replace(/\s+/g, " ");
+  return `${name}|${normalizeVehiclePlate(d.vehicleRegistration ?? "")}`;
+}
+
+export function FleetMap({ jobs, driverPins = [], fleetRoutes }: Props) {
   const containerRef = useRef<HTMLDivElement>(null);
   const mapRef = useRef<L.Map | null>(null);
   const jobsLayerRef = useRef<L.LayerGroup | null>(null);
@@ -117,37 +130,72 @@ export function FleetMap({ jobs, driverPins = [] }: Props) {
       const statusRaw = j.status;
       const statusLabel =
         typeof statusRaw === "string" ? statusRaw.replace(/-/g, " ") : "scheduled";
+      const hasIssue = jobBoardHasIssues(j);
       const coll = collectionMapPoint(j);
       if (!Number.isFinite(coll.lat) || !Number.isFinite(coll.lng)) continue;
       const pcC = j.collectionPostcode ? ` · ${escapeHtml(j.collectionPostcode)}` : "";
       const srcC = coll.source === "geocoded" ? " (postcode/map)" : " (demo — add postcodes)";
-      const popupC = `<div class="text-sm"><strong>${escapeHtml(j.jobNumber)}</strong> — Collection${pcC}${srcC}<br/><span class="capitalize">${escapeHtml(statusLabel)}</span> · ${escapeHtml(j.customerName)}<br/><a href="${href}" class="text-ht-slate underline">Job details</a></div>`;
-      L.marker([coll.lat, coll.lng]).bindPopup(popupC).addTo(jobsLayer);
+      const issueNote = hasIssue ? "<br/><span style='color:#b91c1c;font-weight:600'>Data incomplete — fix on job</span>" : "";
+      const popupC = `<div class="text-sm"><strong>${escapeHtml(j.jobNumber)}</strong> — Collection${pcC}${srcC}<br/><span class="capitalize">${escapeHtml(statusLabel)}</span> · ${escapeHtml(j.customerName)}${issueNote}<br/><a href="${href}" class="text-ht-slate underline">Job details</a></div>`;
+      L.marker([coll.lat, coll.lng], { icon: collectionJobIcon(hasIssue) }).bindPopup(popupC).addTo(jobsLayer);
 
       const del = deliveryMapPoint(j);
+      const bundle = fleetRoutes?.byJobId[j.id];
+      const planLeg = bundle?.planLeg;
+      const driverLeg = bundle?.driverLeg;
+
       if (del) {
         const pcD = j.deliveryPostcode ? ` · ${escapeHtml(j.deliveryPostcode)}` : "";
-        const popupD = `<div class="text-sm"><strong>${escapeHtml(j.jobNumber)}</strong> — Delivery${pcD}<br/>${escapeHtml(j.customerName)}<br/><a href="${href}" class="text-ht-slate underline">Job details</a></div>`;
+        const popupD = `<div class="text-sm"><strong>${escapeHtml(j.jobNumber)}</strong> — Delivery${pcD}<br/>${escapeHtml(j.customerName)}${issueNote}<br/><a href="${href}" class="text-ht-slate underline">Job details</a></div>`;
         const dLat = Math.abs(del.lat - coll.lat);
         const dLng = Math.abs(del.lng - coll.lng);
-        if (
-          (dLat > 0.002 || dLng > 0.002) &&
-          Number.isFinite(del.lat) &&
-          Number.isFinite(del.lng)
-        ) {
-          L.marker([del.lat, del.lng], { icon: deliveryDotIcon }).bindPopup(popupD).addTo(jobsLayer);
-          L.polyline(
-            [
-              [coll.lat, coll.lng],
-              [del.lat, del.lng],
-            ],
-            {
-              color: "#0d9488",
+        const showDeliveryAndLeg =
+          (dLat > 0.002 || dLng > 0.002) && Number.isFinite(del.lat) && Number.isFinite(del.lng);
+
+        if (showDeliveryAndLeg) {
+          const legColor = hasIssue ? JOB_BOARD_MAP_COLORS.issue : JOB_BOARD_MAP_COLORS.inTransit;
+          if (planLeg?.points && planLeg.points.length >= 2) {
+            L.polyline(planLeg.points, {
+              color: legColor,
               weight: 4,
-              opacity: 0.65,
-              dashArray: "10 8",
-            }
-          ).bindPopup(`<div class="text-sm"><strong>${escapeHtml(j.jobNumber)}</strong> — planned leg (straight line)</div>`).addTo(jobsLayer);
+              opacity: 0.82,
+            })
+              .bindPopup(
+                `<div class="text-sm"><strong>${escapeHtml(j.jobNumber)}</strong> — planned road route (collection → delivery)<br/><span class="text-gray-700">${escapeHtml(formatEtaSummary(planLeg))}</span></div>`
+              )
+              .addTo(jobsLayer);
+          } else {
+            L.polyline(
+              [
+                [coll.lat, coll.lng],
+                [del.lat, del.lng],
+              ],
+              {
+                color: legColor,
+                weight: 4,
+                opacity: 0.7,
+                dashArray: "10 8",
+              }
+            )
+              .bindPopup(
+                `<div class="text-sm"><strong>${escapeHtml(j.jobNumber)}</strong> — planned leg (straight line — road route loading or unavailable)</div>`
+              )
+              .addTo(jobsLayer);
+          }
+
+          if (driverLeg?.points && driverLeg.points.length >= 2) {
+            L.polyline(driverLeg.points, {
+              color: "#1d4ed8",
+              weight: 5,
+              opacity: 0.88,
+            })
+              .bindPopup(
+                `<div class="text-sm"><strong>${escapeHtml(j.jobNumber)}</strong> — live route to delivery (matched driver)<br/><span class="text-gray-800">${escapeHtml(formatEtaSummary(driverLeg))}</span></div>`
+              )
+              .addTo(jobsLayer);
+          }
+
+          L.marker([del.lat, del.lng], { icon: deliveryJobIcon(hasIssue) }).bindPopup(popupD).addTo(jobsLayer);
         }
       }
     }
@@ -202,16 +250,21 @@ export function FleetMap({ jobs, driverPins = [] }: Props) {
     } catch (e) {
       console.error("[FleetMap] update layers failed", e);
     }
-  }, [jobs, driverPins]);
+  }, [jobs, driverPins, fleetRoutes]);
 
   return (
     <div className="relative w-full overflow-hidden rounded-xl border border-ht-border bg-slate-100">
       <div ref={containerRef} className="z-0 h-[min(420px,55vh)] w-full min-h-[280px]" />
       <p className="border-t border-ht-border bg-ht-canvas px-3 py-2 text-xs leading-snug text-slate-600">
         <span className="font-semibold text-ht-navy">Map:</span> OpenStreetMap.{" "}
-        <span className="font-semibold text-ht-navy">Jobs:</span> blue = collection; orange = delivery; teal dashed = straight-line route between them.{" "}
-        <span className="font-semibold text-ht-navy">Drivers:</span> green dots = live GPS from the driver app (last 45
-        min). Requires Supabase and HTTPS on phones.
+        <span className="font-semibold text-ht-navy">Jobs:</span> yellow = collection; green = delivery; amber = planned
+        collection→delivery on roads (OSRM typical speeds) or dashed straight line if routing is not ready; blue = matched
+        driver→delivery (Google traffic when <code className="rounded bg-slate-200/80 px-0.5">VITE_GOOGLE_MAPS_API_KEY</code>{" "}
+        is set, otherwise same road engine as amber). Red ring / red styling = data issues (job board rules).{" "}
+        <span className="font-semibold text-ht-navy">Drivers:</span> green dots = live GPS (last 45 min). Tap lines for ETA.
+        {fleetRoutes?.loading ? (
+          <span className="ml-1 font-medium text-ht-slate"> — updating routes…</span>
+        ) : null}
       </p>
     </div>
   );

@@ -6,6 +6,7 @@ import {
   ChevronRight,
   ClipboardList,
   FileBarChart,
+  Headphones,
   LayoutDashboard,
   LogOut,
   MapPin,
@@ -156,6 +157,14 @@ export function Layout() {
             <HeaderSearch />
           </div>
           <div className="ml-auto flex shrink-0 items-center gap-2 lg:gap-4">
+            <Link
+              to="/report-issue"
+              className="inline-flex items-center gap-1.5 rounded-lg border border-ht-border bg-white px-2.5 py-1.5 text-xs font-medium text-ht-slate transition-colors hover:bg-ht-canvas"
+              title="Report a technical issue or change request"
+            >
+              <Headphones size={16} className="shrink-0 text-ht-slate" aria-hidden />
+              <span className="hidden sm:inline">Report issue</span>
+            </Link>
             <NotificationsDropdown />
             <div className="hidden items-center gap-3 lg:flex">
               <div className="hidden text-right lg:block">

@@ -20,8 +20,13 @@ export default function DriverAppPage() {
   const driverName = session?.driverName ?? "";
   const vehicleReg = session?.vehicleReg ?? "";
   const jobIds = session?.jobIds ?? [];
+  const headerTitle = driverName.trim() ? driverName : vehicleReg;
 
-  const { status, lastError, lastUpdated, start, stop } = useDriverLocationSharing(driverName, vehicleReg);
+  const { status, lastError, lastUpdated, start, stop } = useDriverLocationSharing(
+    driverName,
+    vehicleReg,
+    jobIds
+  );
 
   const loadJobs = useCallback(async () => {
     const all = await fetchJobsSnapshot();
@@ -96,7 +101,7 @@ export default function DriverAppPage() {
               <Truck className="h-6 w-6 sm:h-5 sm:w-5" aria-hidden />
             </div>
             <div className="min-w-0">
-              <div className="truncate text-lg font-semibold text-gray-900 sm:text-base">{driverName}</div>
+              <div className="truncate text-lg font-semibold text-gray-900 sm:text-base">{headerTitle}</div>
               <div className="truncate text-sm text-gray-500 sm:text-xs">{vehicleReg}</div>
             </div>
           </div>
@@ -120,8 +125,8 @@ export default function DriverAppPage() {
               Live location (optional)
             </h2>
             <p className="mt-2 text-sm leading-relaxed text-gray-600 sm:mt-1 sm:text-xs">
-              Tap the button and allow location when your phone asks. Your name shows on the office map. Use the live site
-              (HTTPS).
+              Tap the button and allow location when your phone asks. Your registration (or name, if you entered one) shows
+              on the office map. Use the live site (HTTPS).
             </p>
           </div>
           <div className="space-y-4 p-4 sm:space-y-3">
@@ -184,7 +189,7 @@ export default function DriverAppPage() {
           <p className="text-center text-sm text-gray-500">Loading…</p>
         ) : jobs.length === 0 ? (
           <Card className="rounded-2xl p-6 text-center text-base text-gray-600 sm:text-sm">
-            No jobs found. Ask the office to check assignment.
+            No jobs found. Ask the office to check the job number and vehicle registration on the job.
           </Card>
         ) : (
           <ul className="space-y-3">

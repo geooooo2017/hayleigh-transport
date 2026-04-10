@@ -169,6 +169,14 @@ export default function QuotePage() {
               Staff — operations login
             </Link>
           </p>
+          <p className="mt-3 text-sm text-slate-400">
+            <Link
+              to="/report-issue"
+              className="font-medium text-white/90 underline decoration-white/40 hover:decoration-white"
+            >
+              Problem with this page? Report a technical issue
+            </Link>
+          </p>
         </div>
       </div>
 

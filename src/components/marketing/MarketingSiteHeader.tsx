@@ -8,6 +8,7 @@ const nav = [
   { to: "/", label: "Home", end: true },
   { to: "/about", label: "About", end: false },
   { to: "/contact", label: "Contact", end: false },
+  { to: "/report-issue", label: "Report issue", end: false },
 ];
 
 export function MarketingSiteHeader() {

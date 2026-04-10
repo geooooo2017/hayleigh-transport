@@ -6,12 +6,18 @@ export type DriverMapPin = {
   lat: number;
   lng: number;
   updatedAt: string;
+  /** From driver sign-in; used with registration to match jobs on the map. */
+  jobIds: number[];
 };
 
-function driverKey(driverName: string, vehicleReg: string): string {
-  const n = driverName.trim().toLowerCase().replace(/\s+/g, " ");
-  const v = vehicleReg.replace(/\s+/g, "").toLowerCase();
-  return `${n}|${v}`;
+/** Alias for map / routing hooks (same shape as Supabase driver row). */
+export type FleetDriverPin = DriverMapPin;
+
+/** Stable row key: vehicle + sorted job ids (matches sign-in gate). */
+export function buildDriverPositionKey(vehicleReg: string, jobIds: number[]): string {
+  const v = normalizeVehiclePlate(vehicleReg);
+  const ids = [...jobIds].sort((a, b) => a - b).join(",");
+  return `${v}|${ids}`;
 }
 
 export function normalizeVehiclePlate(s: string): string {
@@ -22,17 +28,22 @@ export function normalizeVehiclePlate(s: string): string {
 export async function upsertDriverPosition(params: {
   driverName: string;
   vehicleRegistration: string;
+  jobIds: number[];
   lat: number;
   lng: number;
 }): Promise<{ ok: boolean; error?: string }> {
   const supabase = getSupabase();
   if (!supabase) return { ok: false, error: "Cloud sync is not configured." };
-  const key = driverKey(params.driverName, params.vehicleRegistration);
+  const jobIds = [...params.jobIds].filter((id) => Number.isFinite(id));
+  if (jobIds.length === 0) return { ok: false, error: "No jobs in session." };
+  const key = buildDriverPositionKey(params.vehicleRegistration, jobIds);
+  const displayName = params.driverName.trim() || params.vehicleRegistration.trim();
   const { error } = await supabase.from("driver_positions").upsert(
     {
       driver_key: key,
-      driver_name: params.driverName.trim(),
+      driver_name: displayName,
       vehicle_registration: params.vehicleRegistration.trim(),
+      job_ids: jobIds,
       lat: params.lat,
       lng: params.lng,
       updated_at: new Date().toISOString(),
@@ -44,10 +55,15 @@ export async function upsertDriverPosition(params: {
 }
 
 /** Remove row when driver stops sharing (optional cleanup). */
-export async function deleteDriverPosition(driverName: string, vehicleRegistration: string): Promise<void> {
+export async function deleteDriverPosition(
+  vehicleRegistration: string,
+  jobIds: number[]
+): Promise<void> {
   const supabase = getSupabase();
   if (!supabase) return;
-  const key = driverKey(driverName, vehicleRegistration);
+  const ids = [...jobIds].filter((id) => Number.isFinite(id));
+  if (ids.length === 0) return;
+  const key = buildDriverPositionKey(vehicleRegistration, ids);
   await supabase.from("driver_positions").delete().eq("driver_key", key);
 }
 
@@ -74,11 +90,16 @@ export async function fetchDriverPositionsForMap(): Promise<DriverMapPin[]> {
         Number.isFinite(row.lat) &&
         Number.isFinite(row.lng)
     )
-    .map((row) => ({
-      driverName: row.driver_name,
-      vehicleRegistration: row.vehicle_registration,
-      lat: row.lat,
-      lng: row.lng,
-      updatedAt: row.updated_at as string,
-    }));
+    .map((row) => {
+      const rawIds = row.job_ids as number[] | null | undefined;
+      const jobIds = Array.isArray(rawIds) ? rawIds.filter((id) => typeof id === "number" && Number.isFinite(id)) : [];
+      return {
+        driverName: row.driver_name as string,
+        vehicleRegistration: row.vehicle_registration as string,
+        lat: row.lat as number,
+        lng: row.lng as number,
+        updatedAt: row.updated_at as string,
+        jobIds,
+      };
+    });
 }

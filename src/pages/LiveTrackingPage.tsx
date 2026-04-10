@@ -4,6 +4,8 @@ import { useCustomerArrivalEtaAlerts } from "../hooks/useCustomerArrivalEtaAlert
 import { useJobs } from "../context/JobsContext";
 import { Btn, Card } from "../components/Layout";
 import { FleetMap, type FleetDriverPin } from "../components/FleetMap";
+import { useFleetDrivingRoutes } from "../hooks/useFleetDrivingRoutes";
+import { formatEtaSummary } from "../lib/drivingDirections";
 import { formatJobCardDate } from "../lib/jobAddress";
 import { fetchDriverPositionsForMap } from "../lib/driverPositionsApi";
 import { platformPath } from "../routes/paths";
@@ -23,6 +25,7 @@ export default function LiveTrackingPage() {
   }, []);
 
   useCustomerArrivalEtaAlerts(jobs, driverPins, setJobs);
+  const fleetRoutes = useFleetDrivingRoutes(jobs, driverPins);
 
   return (
     <div className="space-y-6">
@@ -34,7 +37,8 @@ export default function LiveTrackingPage() {
       <Card className="space-y-3 p-5">
         <h2 className="text-base font-semibold text-gray-900">How to get a driver on the map</h2>
         <p className="text-sm text-gray-600">
-          The driver must use the real site address (HTTPS), and their name and vehicle must match the job in the office system.
+          The driver must use the real site address (HTTPS). Sign-in needs the <strong>vehicle registration</strong> and{" "}
+          <strong>job number(s)</strong> to match the office job (truck plates on the job sheet).
         </p>
         <ol className="list-decimal space-y-2 pl-5 text-sm text-gray-800">
           <li>
@@ -46,14 +50,13 @@ export default function LiveTrackingPage() {
             then use <strong>Look up UK postcodes → map</strong> so stops appear on the fleet map.
           </li>
           <li>
-            <strong>Office — match the driver app.</strong> Set <strong>Assigned driver name</strong> to the exact name the
-            driver will type (e.g. Nik). Set <strong>truck plates</strong> on the job to the exact registration the driver will
-            enter (spacing ignored when matching).
+            <strong>Office — truck plates.</strong> Set <strong>truck plates</strong> on the job to the registration the driver
+            will enter (spacing ignored when matching). Assigned driver name is optional for the driver app.
           </li>
           <li>
             <strong>Driver — sign in.</strong> Open the driver page (e.g. <code className="rounded bg-gray-100 px-1 text-xs">/driver</code> on your
-            live website). Enter their <strong>name</strong>, <strong>vehicle registration</strong>, and one or more{" "}
-            <strong>job numbers</strong> they are running. The app checks these against the jobs in the system.
+            live website). Enter <strong>vehicle registration</strong> and one or more <strong>job numbers</strong> they are
+            running. An optional name is only used as a label on the map.
           </li>
           <li>
             <strong>Driver — share location.</strong> After sign-in, tap to start live location. Allow the browser location
@@ -66,7 +69,7 @@ export default function LiveTrackingPage() {
         </ol>
       </Card>
 
-      <FleetMap jobs={jobs} driverPins={driverPins} />
+      <FleetMap jobs={jobs} driverPins={driverPins} fleetRoutes={fleetRoutes} />
 
       {active.length === 0 ? (
         <Card className="p-8 text-center text-gray-600">
@@ -77,7 +80,9 @@ export default function LiveTrackingPage() {
         </Card>
       ) : (
         <div className="space-y-3">
-          {active.map((j) => (
+          {active.map((j) => {
+            const driverLeg = fleetRoutes.byJobId[j.id]?.driverLeg;
+            return (
             <Card key={j.id} className="flex flex-wrap items-center justify-between gap-4 p-4">
               <div>
                 <div className="font-semibold text-ht-slate">{j.jobNumber}</div>
@@ -98,6 +103,12 @@ export default function LiveTrackingPage() {
                     <dt className="shrink-0 text-gray-500">Delivery postcode</dt>
                     <dd className="truncate text-right font-mono uppercase">{(j.deliveryPostcode ?? "").trim() || "—"}</dd>
                   </div>
+                  {driverLeg ? (
+                    <div className="flex justify-between gap-6 border-t border-gray-100 pt-1">
+                      <dt className="shrink-0 text-gray-500">ETA to delivery</dt>
+                      <dd className="text-right font-medium text-ht-slate">{formatEtaSummary(driverLeg)}</dd>
+                    </div>
+                  ) : null}
                 </dl>
               </div>
               <div className="text-right text-sm">
@@ -110,7 +121,8 @@ export default function LiveTrackingPage() {
                 </Btn>
               </Link>
             </Card>
-          ))}
+          );
+          })}
         </div>
       )}
     </div>

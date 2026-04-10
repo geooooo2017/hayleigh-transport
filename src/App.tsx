@@ -7,6 +7,7 @@ import { MarketingLayout } from "./pages/marketing/MarketingLayout";
 import MarketingAbout from "./pages/marketing/MarketingAbout";
 import MarketingContact from "./pages/marketing/MarketingContact";
 import MarketingHome from "./pages/marketing/MarketingHome";
+import TechnicalSupportReportPage from "./pages/TechnicalSupportReportPage";
 import CustomerInvoicingPage from "./pages/CustomerInvoicingPage";
 import CustomersPage from "./pages/CustomersPage";
 import DashboardPage from "./pages/DashboardPage";
@@ -42,6 +43,7 @@ export default function App() {
         <Route index element={<MarketingHome />} />
         <Route path="about" element={<MarketingAbout />} />
         <Route path="contact" element={<MarketingContact />} />
+        <Route path="report-issue" element={<TechnicalSupportReportPage />} />
       </Route>
 
       <Route

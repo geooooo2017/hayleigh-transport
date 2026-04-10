@@ -23,7 +23,7 @@ import { useJobRecycleBin, useJobs } from "../context/JobsContext";
 import { delay, geocodeNominatim, geocodeUkPostcode } from "../lib/geocode";
 import { isValidUkPostcodeFormat, ukPostcodeValidationMessage } from "../lib/ukPostcode";
 import { userCanDeleteJobs } from "../lib/permissions";
-import { downloadCombinedBookingPdf } from "../lib/jobBookingPdf";
+import { downloadCustomerBookingPdf, downloadSupplierBookingPdf } from "../lib/jobBookingPdf";
 import {
   buildPodMailtoUrl,
   dataUrlToFile,
@@ -368,6 +368,38 @@ export default function JobDetailPage() {
     );
   };
 
+  const bookingPdfBusyRef = useRef(false);
+  const downloadBookingPdf = useCallback(
+    async (variant: "customer" | "supplier") => {
+      if (bookingPdfBusyRef.current) return;
+      bookingPdfBusyRef.current = true;
+      const issuer = {
+        details: getUserCompanyDetails(user?.id),
+        preparedBy: user?.name,
+      };
+      try {
+        if (variant === "customer") {
+          await downloadCustomerBookingPdf(job, issuer);
+        } else {
+          await downloadSupplierBookingPdf(job, issuer);
+        }
+      } catch {
+        notifyError("Could not build PDF", { description: "Try again or check that the logo loads." });
+      } finally {
+        bookingPdfBusyRef.current = false;
+      }
+    },
+    [job, user?.id, user?.name]
+  );
+
+  const INTERNAL_PDF_CONFIRM_MSG =
+    "This PDF is for internal use only. It includes supplier buy rates and carrier details — it must not be sent to the customer.\n\nDownload this internal PDF?";
+
+  const requestInternalBookingPdf = useCallback(() => {
+    if (!window.confirm(INTERNAL_PDF_CONFIRM_MSG)) return;
+    void downloadBookingPdf("supplier");
+  }, [downloadBookingPdf]);
+
   const jobWithAddressDraft = (): Job => ({
     ...job,
     collectionAddressLines: cAddrLines,
@@ -564,16 +596,19 @@ export default function JobDetailPage() {
             variant="outline"
             className="gap-2"
             type="button"
-            onClick={() =>
-              downloadCombinedBookingPdf(job, {
-                details: getUserCompanyDetails(user?.id),
-                preparedBy: user?.name,
-              }).catch(() =>
-                notifyError("Could not build PDF", { description: "Try again or check that the logo loads." })
-              )
-            }
+            onClick={() => void downloadBookingPdf("customer")}
           >
-            <FileDown size={16} /> Booking PDF (customer &amp; supplier)
+            <FileDown size={16} /> Customer PDF
+          </Btn>
+          <Btn
+            variant="outline"
+            className="gap-2 border-amber-600/70 bg-amber-50 text-amber-950 hover:bg-amber-100"
+            type="button"
+            title="Internal only — includes buy rate and carrier details. Never send this file to your customer."
+            onClick={() => requestInternalBookingPdf()}
+          >
+            <AlertTriangle size={16} className="shrink-0 text-amber-700" aria-hidden />
+            <FileDown size={16} /> Internal PDF (office / carrier)
           </Btn>
           <Btn
             className="gap-2"

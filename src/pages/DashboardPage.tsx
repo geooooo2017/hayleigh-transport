@@ -8,6 +8,7 @@ import { useCustomerArrivalEtaAlerts } from "../hooks/useCustomerArrivalEtaAlert
 import { formatAddressSummary } from "../lib/jobAddress";
 import { fetchDriverPositionsForMap } from "../lib/driverPositionsApi";
 import { FleetMap, type FleetDriverPin } from "../components/FleetMap";
+import { useFleetDrivingRoutes } from "../hooks/useFleetDrivingRoutes";
 import { Btn, Card } from "../components/Layout";
 import { platformPath } from "../routes/paths";
 
@@ -52,6 +53,7 @@ export default function DashboardPage() {
   }, []);
 
   useCustomerArrivalEtaAlerts(jobs, driverPins, setJobs);
+  const fleetRoutes = useFleetDrivingRoutes(jobs, driverPins);
 
   return (
     <div className="space-y-4 lg:space-y-6">
@@ -224,8 +226,9 @@ export default function DashboardPage() {
                       Live map & tracking
                     </h2>
                     <p className="mt-1 text-sm text-slate-600">
-                      Active jobs (not completed) show collection and delivery pins. Green dots are drivers sharing location.
-                      Positions refresh automatically.
+                      Active jobs use job board colours on the map; amber shows collection→delivery on roads (or a dashed
+                      straight line while routing loads); blue shows a matched driver’s route to delivery with ETA when
+                      available. Green dots are drivers sharing location. Positions refresh automatically.
                     </p>
                   </div>
                   <Link to={platformPath("/live-tracking")} className="shrink-0">
@@ -236,7 +239,7 @@ export default function DashboardPage() {
                   </Link>
                 </div>
                 <div className="px-3 pb-3 pt-0 sm:px-4">
-                  <FleetMap jobs={jobs} driverPins={driverPins} />
+                  <FleetMap jobs={jobs} driverPins={driverPins} fleetRoutes={fleetRoutes} />
                 </div>
               </Card>
 

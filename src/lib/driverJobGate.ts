@@ -13,18 +13,13 @@ export type GateResult =
   | { ok: false; message: string };
 
 /**
- * Driver must match job number(s), assigned driver name (as set in the office), and vehicle plates on the job.
+ * Driver must match job number(s) and vehicle plates on each job (same as the office job sheet).
+ * Assigned driver name on the job is not required for sign-in.
  */
-export function verifyDriverJobs(
-  jobs: Job[],
-  driverName: string,
-  vehicleReg: string,
-  jobNumbersRaw: string
-): GateResult {
-  const nameNorm = driverName.trim().toLowerCase();
+export function verifyDriverJobs(jobs: Job[], vehicleReg: string, jobNumbersRaw: string): GateResult {
   const plateNorm = normalizeVehiclePlate(vehicleReg);
-  if (!nameNorm || !plateNorm) {
-    return { ok: false, message: "Enter your name and vehicle registration." };
+  if (!plateNorm) {
+    return { ok: false, message: "Enter your vehicle registration." };
   }
 
   const tokens = parseJobNumberTokens(jobNumbersRaw);
@@ -38,17 +33,6 @@ export function verifyDriverJobs(
     const job = jobs.find((j) => j.jobNumber.trim().toLowerCase() === t);
     if (!job) {
       return { ok: false, message: `No job found with number “${token}”.` };
-    }
-
-    const assigned = (job.assignedDriverName ?? "").trim().toLowerCase();
-    if (!assigned) {
-      return {
-        ok: false,
-        message: `Job ${job.jobNumber} has no assigned driver yet. Ask the office to set your name on that job.`,
-      };
-    }
-    if (assigned !== nameNorm) {
-      return { ok: false, message: `Job ${job.jobNumber} is not assigned to this driver name.` };
     }
 
     const jobPlate = normalizeVehiclePlate(job.truckPlates ?? "");

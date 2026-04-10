@@ -76,13 +76,16 @@ export function estimatedDriveHoursStraightLineKm(distanceKm: number): number {
 
 export function driverPinMatchesJob(
   job: Job,
-  pin: { driverName: string; vehicleRegistration: string }
+  pin: { driverName: string; vehicleRegistration: string; jobIds?: number[] }
 ): boolean {
-  const assigned = (job.assignedDriverName ?? "").trim().toLowerCase();
-  const pinName = pin.driverName.trim().toLowerCase();
-  if (!assigned || assigned !== pinName) return false;
   const jp = normalizeVehiclePlate(job.truckPlates ?? "");
   const vp = normalizeVehiclePlate(pin.vehicleRegistration);
-  if (!jp || jp !== vp) return false;
+  if (!jp || !vp || jp !== vp) return false;
+  if (pin.jobIds && pin.jobIds.length > 0) {
+    return pin.jobIds.includes(job.id);
+  }
+  const assigned = (job.assignedDriverName ?? "").trim().toLowerCase();
+  const pinName = pin.driverName.trim().toLowerCase();
+  if (!assigned || !pinName || assigned !== pinName) return false;
   return true;
 }
