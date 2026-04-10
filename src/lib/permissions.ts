@@ -1,6 +1,6 @@
 import type { User } from "../types";
 
-/** Only Nik may permanently remove jobs from the system (Settings explains this). */
+/** Any signed-in staff user may move jobs to the 90-day deleted bin (Settings). */
 export function userCanDeleteJobs(user: User | null): boolean {
-  return user?.id === "nik";
+  return user != null;
 }

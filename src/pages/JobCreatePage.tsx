@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { notifyError, notifyMessage, notifySuccess } from "../lib/platformNotify";
 import { ArrowLeft } from "lucide-react";
@@ -7,8 +7,7 @@ import { useJobs } from "../context/JobsContext";
 import { downloadBothBookingPdfs } from "../lib/jobBookingPdf";
 import { getUserCompanyDetails } from "../lib/userCompanyProfile";
 import { geocodeUkPostcode } from "../lib/geocode";
-import { getJobAddressIssues, isRequiredEmailOk } from "../lib/jobAddressValidation";
-import { computeBibbyBreakdown, resolveBibbyInvoiceValue } from "../lib/bibbyFinancing";
+import { getJobAddressIssues } from "../lib/jobAddressValidation";
 import {
   REQ,
   JOB_GENERAL_WHY,
@@ -18,14 +17,19 @@ import {
   JOB_REGISTER_WHY,
   JOB_NOTES_WHY,
 } from "../lib/fieldRequirementCopy";
-import { getUserBibbyTerms } from "../lib/userBibbySettings";
+import { loadSavedJobAddresses, saveSavedJobAddresses } from "../lib/userSavedAddresses";
 import { isValidUkPostcodeFormat } from "../lib/ukPostcode";
 import { allocateJobNumber, previewJobNumber } from "../lib/jobNumbers";
 import type { Job } from "../types";
-import { BibbyJobCosting } from "../components/BibbyJobCosting";
 import { MissingFieldLegend, ReqStar, WhyThisSection } from "../components/FormGuidance";
 import { Btn, Card } from "../components/Layout";
 import { platformPath } from "../routes/paths";
+import { looksLikeEmail } from "../lib/podMailto";
+import { joinStructuredAddressLines, splitSavedAddressLines } from "../lib/addressStructured";
+import type { PlaceResolvedPayload } from "../lib/googlePlaceToAddress";
+import { StructuredSiteAddressFields } from "../components/StructuredSiteAddressFields";
+
+const GOOGLE_MAPS_KEY = import.meta.env.VITE_GOOGLE_MAPS_API_KEY as string | undefined;
 
 export default function JobCreatePage() {
   const navigate = useNavigate();
@@ -40,12 +44,18 @@ export default function JobCreatePage() {
   const [carrier, setCarrier] = useState("");
   const [truckPlates, setTruckPlates] = useState("");
   const [assignedDriverName, setAssignedDriverName] = useState("");
-  const [collectionAddressLines, setCollectionAddressLines] = useState("");
+  const [cOrg, setCOrg] = useState("");
+  const [cLine1, setCLine1] = useState("");
+  const [cLine2, setCLine2] = useState("");
+  const [cTown, setCTown] = useState("");
   const [collectionContactName, setCollectionContactName] = useState("");
   const [collectionContactPhone, setCollectionContactPhone] = useState("");
   const [collectionContactEmail, setCollectionContactEmail] = useState("");
   const [collectionPostcode, setCollectionPostcode] = useState("");
-  const [deliveryAddressLines, setDeliveryAddressLines] = useState("");
+  const [dOrg, setDOrg] = useState("");
+  const [dLine1, setDLine1] = useState("");
+  const [dLine2, setDLine2] = useState("");
+  const [dTown, setDTown] = useState("");
   const [deliveryContactName, setDeliveryContactName] = useState("");
   const [deliveryContactPhone, setDeliveryContactPhone] = useState("");
   const [deliveryContactEmail, setDeliveryContactEmail] = useState("");
@@ -65,13 +75,60 @@ export default function JobCreatePage() {
   const [customerInvoiceRef, setCustomerInvoiceRef] = useState("");
   const [customerPaymentDate, setCustomerPaymentDate] = useState("");
   const [notes, setNotes] = useState("");
-  const [bibbyInvoiceStr, setBibbyInvoiceStr] = useState("");
-  const [bibbyDaysStr, setBibbyDaysStr] = useState("");
   const [preview, setPreview] = useState("");
 
   useEffect(() => {
     if (user) setPreview(previewJobNumber(user, routeType));
   }, [user, routeType]);
+
+  const collectionAddressLines = useMemo(
+    () => joinStructuredAddressLines({ organisation: cOrg, line1: cLine1, line2: cLine2, town: cTown }),
+    [cOrg, cLine1, cLine2, cTown]
+  );
+  const deliveryAddressLines = useMemo(
+    () => joinStructuredAddressLines({ organisation: dOrg, line1: dLine1, line2: dLine2, town: dTown }),
+    [dOrg, dLine1, dLine2, dTown]
+  );
+
+  useEffect(() => {
+    if (!user?.id) return;
+    const s = loadSavedJobAddresses(user.id);
+    if (!s) return;
+    const cp = splitSavedAddressLines(s.collection.addressLines);
+    const dp = splitSavedAddressLines(s.delivery.addressLines);
+    setCOrg((v) => v || cp.organisation);
+    setCLine1((v) => v || cp.line1);
+    setCLine2((v) => v || cp.line2);
+    setCTown((v) => v || cp.town);
+    setCollectionContactName((v) => v || s.collection.contactName);
+    setCollectionContactPhone((v) => v || s.collection.contactPhone);
+    setCollectionContactEmail((v) => v || s.collection.contactEmail);
+    setCollectionPostcode((v) => v || s.collection.postcode);
+    setDOrg((v) => v || dp.organisation);
+    setDLine1((v) => v || dp.line1);
+    setDLine2((v) => v || dp.line2);
+    setDTown((v) => v || dp.town);
+    setDeliveryContactName((v) => v || s.delivery.contactName);
+    setDeliveryContactPhone((v) => v || s.delivery.contactPhone);
+    setDeliveryContactEmail((v) => v || s.delivery.contactEmail);
+    setDeliveryPostcode((v) => v || s.delivery.postcode);
+  }, [user?.id]);
+
+  const onCollectionPlace = useCallback((p: PlaceResolvedPayload) => {
+    setCOrg(p.organisation);
+    setCLine1(p.line1);
+    setCLine2(p.line2);
+    setCTown(p.town);
+    if (p.postcode.trim()) setCollectionPostcode(p.postcode.trim().toUpperCase());
+  }, []);
+
+  const onDeliveryPlace = useCallback((p: PlaceResolvedPayload) => {
+    setDOrg(p.organisation);
+    setDLine1(p.line1);
+    setDLine2(p.line2);
+    setDTown(p.town);
+    if (p.postcode.trim()) setDeliveryPostcode(p.postcode.trim().toUpperCase());
+  }, []);
 
   const buy = parseFloat(buyPrice) || 0;
   const sell = parseFloat(sellPrice) || 0;
@@ -82,34 +139,6 @@ export default function JobCreatePage() {
 
   const marginClass =
     margin < 0 ? "text-red-600" : margin < 15 ? "text-orange-600" : margin < 25 ? "text-yellow-600" : "text-green-600";
-
-  const bibbyTerms = useMemo(() => getUserBibbyTerms(user?.id), [user?.id]);
-
-  const createBibbyDraft = useMemo((): Pick<
-    Job,
-    "sellPrice" | "buyPrice" | "fuelSurcharge" | "extraCharges" | "bibbyInvoiceValueExVat" | "bibbyDaysOutstanding"
-  > => {
-    const invParsed = bibbyInvoiceStr.trim() === "" ? NaN : parseFloat(bibbyInvoiceStr);
-    const invOverride = Number.isFinite(invParsed) && invParsed > 0 ? invParsed : undefined;
-    const daysParsed = bibbyDaysStr.trim() === "" ? undefined : Math.max(0, Math.floor(Number(bibbyDaysStr) || 0));
-    return {
-      sellPrice: sell,
-      buyPrice: buy,
-      fuelSurcharge: fuel,
-      extraCharges: extra,
-      bibbyInvoiceValueExVat: invOverride,
-      bibbyDaysOutstanding: daysParsed,
-    };
-  }, [sell, buy, fuel, extra, bibbyInvoiceStr, bibbyDaysStr]);
-
-  const bibbyBreakdown = useMemo(
-    () => computeBibbyBreakdown(createBibbyDraft, bibbyTerms),
-    [createBibbyDraft, bibbyTerms]
-  );
-
-  const bibbyNetTurnover = sell + fuel + extra;
-  const bibbyInvoiceMiss = resolveBibbyInvoiceValue(createBibbyDraft) <= 0;
-  const bibbyDaysMiss = bibbyDaysStr.trim() === "";
 
   const miss = useMemo(() => {
     const cPc = collectionPostcode.trim();
@@ -128,14 +157,12 @@ export default function JobCreatePage() {
       sell: !(parseFloat(sellPrice) > 0),
       buy: buyPrice.trim() === "",
       cAddr: !collectionAddressLines.trim(),
-      cName: !collectionContactName.trim(),
       cPhone: !collectionContactPhone.trim(),
-      cEmail: !isRequiredEmailOk(collectionContactEmail),
+      cEmail: collectionContactEmail.trim() !== "" && !looksLikeEmail(collectionContactEmail),
       cPc: pcBad(cPc),
       dAddr: !deliveryAddressLines.trim(),
-      dName: !deliveryContactName.trim(),
       dPhone: !deliveryContactPhone.trim(),
-      dEmail: !isRequiredEmailOk(deliveryContactEmail),
+      dEmail: deliveryContactEmail.trim() !== "" && !looksLikeEmail(deliveryContactEmail),
       dPc: pcBad(dPc),
     };
   }, [
@@ -147,12 +174,10 @@ export default function JobCreatePage() {
     sellPrice,
     buyPrice,
     collectionAddressLines,
-    collectionContactName,
     collectionContactPhone,
     collectionContactEmail,
     collectionPostcode,
     deliveryAddressLines,
-    deliveryContactName,
     deliveryContactPhone,
     deliveryContactEmail,
     deliveryPostcode,
@@ -235,12 +260,6 @@ export default function JobCreatePage() {
       }
     }
 
-    const invParsed = bibbyInvoiceStr.trim() === "" ? NaN : parseFloat(bibbyInvoiceStr);
-    const bibbyInvoiceValueExVat =
-      Number.isFinite(invParsed) && invParsed > 0 ? invParsed : undefined;
-    const bibbyDaysOutstanding =
-      bibbyDaysStr.trim() === "" ? undefined : Math.max(0, Math.floor(Number(bibbyDaysStr) || 0));
-
     const job: Job = {
       id: Date.now(),
       jobNumber,
@@ -257,8 +276,6 @@ export default function JobCreatePage() {
       sellPrice: sell,
       fuelSurcharge: fuel,
       extraCharges: extra,
-      bibbyInvoiceValueExVat,
-      bibbyDaysOutstanding,
       collectionAddressLines: collectionAddressLines.trim(),
       collectionContactName: collectionContactName.trim(),
       collectionContactPhone: collectionContactPhone.trim(),
@@ -292,14 +309,30 @@ export default function JobCreatePage() {
       officeUpdatedAt: new Date().toISOString(),
     };
     setJobs((prev) => [...prev, job]);
+    saveSavedJobAddresses(user.id, {
+      collection: {
+        addressLines: collectionAddressLines.trim(),
+        contactName: collectionContactName.trim(),
+        contactPhone: collectionContactPhone.trim(),
+        contactEmail: collectionContactEmail.trim(),
+        postcode: cPc,
+      },
+      delivery: {
+        addressLines: deliveryAddressLines.trim(),
+        contactName: deliveryContactName.trim(),
+        contactPhone: deliveryContactPhone.trim(),
+        contactEmail: deliveryContactEmail.trim(),
+        postcode: dPc,
+      },
+    });
     notifySuccess(`Job ${jobNumber} created successfully!`, { href: platformPath(`/jobs/${job.id}`) });
     try {
       await downloadBothBookingPdfs(job, {
         details: getUserCompanyDetails(user?.id),
         preparedBy: user.name,
       });
-      notifySuccess("Booking PDFs saved", {
-        description: "Customer confirmation and supplier instruction.",
+      notifySuccess("Booking PDF saved", {
+        description: "Single PDF with boxed customer and supplier sections.",
         href: platformPath(`/jobs/${job.id}`),
       });
     } catch {
@@ -327,11 +360,12 @@ export default function JobCreatePage() {
 
       <MissingFieldLegend />
 
-      <form onSubmit={onSubmit} className="space-y-6">
-        <Card className="border-ht-border bg-ht-canvas p-6">
-          <div className="flex flex-wrap items-center justify-between gap-4">
+      <form onSubmit={onSubmit}>
+        <Card className="space-y-8 border-2 border-slate-300 bg-slate-50/50 p-6 shadow-sm">
+          <section className="rounded-xl border-2 border-slate-300 bg-white p-5 shadow-sm">
+          <div className="mb-6 flex flex-wrap items-center justify-between gap-4 border-b border-slate-200 pb-5">
             <div>
-              <div className="mb-1 text-sm text-gray-600">Job Number (Auto-generated)</div>
+              <div className="mb-1 text-sm text-gray-600">Job number (auto-generated)</div>
               <div className="text-3xl font-semibold text-ht-slate">{preview || "—"}</div>
             </div>
             <div className="text-right">
@@ -339,10 +373,7 @@ export default function JobCreatePage() {
               <div className="text-lg font-semibold text-gray-900">{user?.name}</div>
             </div>
           </div>
-        </Card>
-
-        <Card className="p-6">
-          <h2 className="mb-2 text-lg font-semibold">General Information</h2>
+          <h2 className="mb-2 text-lg font-semibold">General information</h2>
           <WhyThisSection>
             <span className="block">{JOB_GENERAL_WHY}</span>
             <span className="mt-2 block">{JOB_CARRIER_WHY}</span>
@@ -453,43 +484,46 @@ export default function JobCreatePage() {
               </p>
             </div>
           </div>
-        </Card>
+          </section>
 
-        <Card className="p-6">
-          <h2 className="mb-2 text-lg font-semibold">Collection &amp; delivery (full details)</h2>
+          <section className="rounded-xl border-2 border-slate-300 bg-white p-5 shadow-sm">
+          <h2 className="mb-2 text-lg font-semibold">Collection &amp; delivery</h2>
           <WhyThisSection>{JOB_ADDRESS_WHY}</WhyThisSection>
           <p className="mb-4 text-sm text-gray-600">
-            All fields below are <strong>required</strong>. Domestic jobs use full UK postcodes (geocoded for Live Tracking).
-            International jobs need postcodes or postal codes for both ends (EU codes are saved; UK-format codes are geocoded
-            when possible).
+            Site addresses use separate lines (organisation, street, town). Without a Google key you can use the free
+            OpenStreetMap search (Search, then pick a result); with a Google Maps key you get inline autocomplete instead. Site
+            phone numbers and postcodes are required; contact names and emails are optional. Domestic jobs use full UK
+            postcodes (geocoded for Live Tracking). International jobs need a postcode or postal code at both ends.
           </p>
           <div className="grid grid-cols-1 gap-8 md:grid-cols-2">
-            <div className="space-y-3 rounded-lg border border-emerald-200/80 bg-emerald-50/30 p-4">
-              <h3 className="text-sm font-semibold text-emerald-900">Collection</h3>
-              <div>
-                <label className="mb-1 block text-sm font-medium">
-                  Address (street, building, company)
-                  <ReqStar show={miss.cAddr} why={REQ.collectionAddress} />
-                </label>
-                <textarea
-                  value={collectionAddressLines}
-                  onChange={(e) => setCollectionAddressLines(e.target.value)}
-                  rows={3}
-                  className="w-full rounded-lg border border-gray-200 px-3 py-2"
-                  placeholder="Line 1, line 2, town…"
-                  required
-                />
-              </div>
+            <div className="space-y-3 rounded-xl border-2 border-emerald-300/90 bg-emerald-50/40 p-4 shadow-sm">
+            <StructuredSiteAddressFields
+              title="Collection"
+              titleClassName="text-sm font-semibold text-emerald-900"
+              wrapperClassName="space-y-3"
+              routeType={routeType}
+              googleMapsApiKey={GOOGLE_MAPS_KEY}
+              organisation={cOrg}
+              line1={cLine1}
+              line2={cLine2}
+              town={cTown}
+              onOrganisationChange={setCOrg}
+              onLine1Change={setCLine1}
+              onLine2Change={setCLine2}
+              onTownChange={setCTown}
+              onPlaceResolved={onCollectionPlace}
+              showAddressRequiredStar={miss.cAddr}
+              addressRequiredWhy={REQ.collectionAddress}
+            />
               <div>
                 <label className="mb-1 block text-sm font-medium">
                   Contact name
-                  <ReqStar show={miss.cName} why={REQ.collectionContact} />
+                  <span className="ml-1 text-xs font-normal text-gray-500">(optional)</span>
                 </label>
                 <input
                   value={collectionContactName}
                   onChange={(e) => setCollectionContactName(e.target.value)}
                   className="w-full rounded-lg border border-gray-200 px-3 py-2"
-                  required
                 />
               </div>
               <div>
@@ -508,6 +542,7 @@ export default function JobCreatePage() {
               <div>
                 <label className="mb-1 block text-sm font-medium">
                   Contact email
+                  <span className="ml-1 text-xs font-normal text-gray-500">(optional)</span>
                   <ReqStar show={miss.cEmail} why={REQ.collectionContact} />
                 </label>
                 <input
@@ -515,7 +550,6 @@ export default function JobCreatePage() {
                   value={collectionContactEmail}
                   onChange={(e) => setCollectionContactEmail(e.target.value)}
                   className="w-full rounded-lg border border-gray-200 px-3 py-2"
-                  required
                 />
               </div>
               <div>
@@ -535,32 +569,34 @@ export default function JobCreatePage() {
                 </p>
               </div>
             </div>
-            <div className="space-y-3 rounded-lg border border-red-200/80 bg-red-50/20 p-4">
-              <h3 className="text-sm font-semibold text-red-900">Delivery</h3>
-              <div>
-                <label className="mb-1 block text-sm font-medium">
-                  Address (street, building, company)
-                  <ReqStar show={miss.dAddr} why={REQ.deliveryAddress} />
-                </label>
-                <textarea
-                  value={deliveryAddressLines}
-                  onChange={(e) => setDeliveryAddressLines(e.target.value)}
-                  rows={3}
-                  className="w-full rounded-lg border border-gray-200 px-3 py-2"
-                  placeholder="Line 1, line 2, town…"
-                  required
-                />
-              </div>
+            <div className="space-y-3 rounded-xl border-2 border-rose-300/90 bg-rose-50/35 p-4 shadow-sm">
+            <StructuredSiteAddressFields
+              title="Delivery"
+              titleClassName="text-sm font-semibold text-red-900"
+              wrapperClassName="space-y-3"
+              routeType={routeType}
+              googleMapsApiKey={GOOGLE_MAPS_KEY}
+              organisation={dOrg}
+              line1={dLine1}
+              line2={dLine2}
+              town={dTown}
+              onOrganisationChange={setDOrg}
+              onLine1Change={setDLine1}
+              onLine2Change={setDLine2}
+              onTownChange={setDTown}
+              onPlaceResolved={onDeliveryPlace}
+              showAddressRequiredStar={miss.dAddr}
+              addressRequiredWhy={REQ.deliveryAddress}
+            />
               <div>
                 <label className="mb-1 block text-sm font-medium">
                   Contact name
-                  <ReqStar show={miss.dName} why={REQ.deliveryContact} />
+                  <span className="ml-1 text-xs font-normal text-gray-500">(optional)</span>
                 </label>
                 <input
                   value={deliveryContactName}
                   onChange={(e) => setDeliveryContactName(e.target.value)}
                   className="w-full rounded-lg border border-gray-200 px-3 py-2"
-                  required
                 />
               </div>
               <div>
@@ -579,6 +615,7 @@ export default function JobCreatePage() {
               <div>
                 <label className="mb-1 block text-sm font-medium">
                   Contact email
+                  <span className="ml-1 text-xs font-normal text-gray-500">(optional)</span>
                   <ReqStar show={miss.dEmail} why={REQ.deliveryContact} />
                 </label>
                 <input
@@ -586,7 +623,6 @@ export default function JobCreatePage() {
                   value={deliveryContactEmail}
                   onChange={(e) => setDeliveryContactEmail(e.target.value)}
                   className="w-full rounded-lg border border-gray-200 px-3 py-2"
-                  required
                 />
               </div>
               <div>
@@ -608,11 +644,11 @@ export default function JobCreatePage() {
             </div>
           </div>
           <p className="mt-4 text-xs text-gray-500">
-            Incomplete addresses show in the bell notifications until every field above is filled.
+            Incomplete required address fields show in the notifications bell until they are filled.
           </p>
-        </Card>
+          </section>
 
-        <Card className="p-6">
+          <section className="rounded-xl border-2 border-slate-300 bg-white p-5 shadow-sm">
           <h2 className="mb-2 text-lg font-semibold">Financial information (ex VAT)</h2>
           <WhyThisSection>{JOB_FINANCE_WHY}</WhyThisSection>
           <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
@@ -677,7 +713,7 @@ export default function JobCreatePage() {
               </div>
             </div>
           </div>
-          <div className="mt-6 rounded-lg border border-gray-200 bg-gray-50 p-4">
+          <div className="mt-6 rounded-lg border-2 border-slate-200 bg-gray-50 p-4">
             <div className="flex flex-wrap justify-between gap-4">
               <div>
                 <div className="text-sm text-gray-600">Estimated Profit</div>
@@ -689,20 +725,9 @@ export default function JobCreatePage() {
               </div>
             </div>
           </div>
-          <BibbyJobCosting
-            terms={bibbyTerms}
-            breakdown={bibbyBreakdown}
-            invoiceValueInput={bibbyInvoiceStr}
-            daysOutstandingInput={bibbyDaysStr}
-            onInvoiceChange={setBibbyInvoiceStr}
-            onDaysChange={setBibbyDaysStr}
-            invoiceMiss={bibbyInvoiceMiss}
-            daysMiss={bibbyDaysMiss}
-            netTurnoverHint={bibbyNetTurnover}
-          />
-        </Card>
+          </section>
 
-        <Card className="p-6">
+          <section className="rounded-xl border-2 border-slate-300 bg-white p-5 shadow-sm">
           <h2 className="mb-2 text-lg font-semibold">Job register &amp; paperwork</h2>
           <WhyThisSection>{JOB_REGISTER_WHY}</WhyThisSection>
           <p className="mb-4 text-sm text-gray-600">
@@ -810,9 +835,9 @@ export default function JobCreatePage() {
               />
             </div>
           </div>
-        </Card>
+          </section>
 
-        <Card className="p-6">
+          <section className="rounded-xl border-2 border-slate-300 bg-white p-5 shadow-sm">
           <h2 className="mb-2 text-lg font-semibold">Notes</h2>
           <WhyThisSection>{JOB_NOTES_WHY}</WhyThisSection>
           <label className="mb-2 block text-sm font-medium">Internal notes</label>
@@ -823,9 +848,10 @@ export default function JobCreatePage() {
             className="w-full rounded-lg border border-gray-200 px-3 py-2"
             placeholder="Internal notes…"
           />
+          </section>
         </Card>
 
-        <div className="flex gap-3">
+        <div className="mt-6 flex gap-3">
           <Btn type="submit">Create Job</Btn>
           <Link to={platformPath("/jobs")}>
             <Btn type="button" variant="outline">

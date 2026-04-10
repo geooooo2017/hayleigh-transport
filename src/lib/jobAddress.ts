@@ -53,6 +53,14 @@ function pc(job: Job, side: AddressSide): string {
   return side === "collection" ? (job.collectionPostcode ?? "") : (job.deliveryPostcode ?? "");
 }
 
+/** UK-style short date for job board / list cards (from YYYY-MM-DD or ISO). */
+export function formatJobCardDate(iso: string | undefined): string {
+  if (!iso?.trim()) return "—";
+  const head = iso.trim().slice(0, 10);
+  const parsed = new Date(`${head}T12:00:00`);
+  return Number.isNaN(parsed.getTime()) ? iso.trim() : parsed.toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" });
+}
+
 /** Short line for lists (map strip, job board). */
 export function formatAddressSummary(job: Job, side: AddressSide, maxLen = 72): string {
   const parts = [street(job, side).trim(), pc(job, side).trim()].filter(Boolean);

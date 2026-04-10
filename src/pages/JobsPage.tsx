@@ -3,14 +3,12 @@ import { Link } from "react-router-dom";
 import { Download, Plus, Search, Trash2 } from "lucide-react";
 import { notifySuccess } from "../lib/platformNotify";
 import { useAuth } from "../context/AuthContext";
-import { useJobs } from "../context/JobsContext";
+import { useJobRecycleBin, useJobs } from "../context/JobsContext";
 import { userCanDeleteJobs } from "../lib/permissions";
 import type { Job } from "../types";
 import { Btn, Card } from "../components/Layout";
 import { prependBrandedCsvPreamble, type UserCompanyDetails } from "../lib/companyBrand";
-import { computeBibbyBreakdown } from "../lib/bibbyFinancing";
 import { getUserCompanyDetails } from "../lib/userCompanyProfile";
-import { getUserBibbyTerms } from "../lib/userBibbySettings";
 import { platformPath } from "../routes/paths";
 import { formatAddressSummary } from "../lib/jobAddress";
 
@@ -20,8 +18,7 @@ function csvCell(v: unknown): string {
   return s;
 }
 
-function exportCsv(rows: Job[], details: UserCompanyDetails, preparedBy: string | undefined, bibbyUserId: string | undefined) {
-  const bibbyTerms = getUserBibbyTerms(bibbyUserId);
+function exportCsv(rows: Job[], details: UserCompanyDetails, preparedBy: string | undefined) {
   const headers = [
     "Collection date",
     "Delivery date",
@@ -39,10 +36,6 @@ function exportCsv(rows: Job[], details: UserCompanyDetails, preparedBy: string 
     "Billable",
     "GP (profit)",
     "Margin %",
-    "Bibby invoice value (ex VAT)",
-    "Bibby days outstanding",
-    "Bibby finance cost",
-    "Net after financing",
     "Invoice sent (customer)",
     "Supplier inv received",
     "POD received",
@@ -61,7 +54,6 @@ function exportCsv(rows: Job[], details: UserCompanyDetails, preparedBy: string 
     "Delivery postcode",
   ];
   const lines = rows.map((y) => {
-    const bib = computeBibbyBreakdown(y, bibbyTerms);
     return [
       csvCell(y.collectionDate),
       csvCell(y.deliveryDate || ""),
@@ -79,10 +71,6 @@ function exportCsv(rows: Job[], details: UserCompanyDetails, preparedBy: string 
       csvCell(y.billable === "yes" ? "Yes" : "No"),
       csvCell(y.profit || 0),
       csvCell(y.margin || 0),
-      csvCell(bib ? bib.invoiceValue.toFixed(2) : ""),
-      csvCell(y.bibbyDaysOutstanding != null ? y.bibbyDaysOutstanding : ""),
-      csvCell(bib ? bib.overallCost.toFixed(2) : ""),
-      csvCell(bib ? bib.profitAfterBibby.toFixed(2) : ""),
       csvCell(y.invoiceSent === "yes" ? "Yes" : "No"),
       csvCell(y.supplierInvoiceReceived === "yes" ? "Yes" : "No"),
       csvCell(y.podReceived === "yes" ? "Yes" : "No"),
@@ -113,7 +101,8 @@ function exportCsv(rows: Job[], details: UserCompanyDetails, preparedBy: string 
 
 export default function JobsPage() {
   const { user } = useAuth();
-  const [jobs, setJobs] = useJobs();
+  const [jobs] = useJobs();
+  const { softDeleteJob } = useJobRecycleBin();
   const canDeleteJob = userCanDeleteJobs(user);
   const [q, setQ] = useState("");
   const filtered = useMemo(() => {
@@ -146,7 +135,7 @@ export default function JobsPage() {
             className="h-9 gap-2 py-1.5 text-sm"
             disabled={jobs.length === 0}
             onClick={() => {
-              exportCsv(filtered, getUserCompanyDetails(user?.id), user?.name, user?.id);
+              exportCsv(filtered, getUserCompanyDetails(user?.id), user?.name);
               notifySuccess("Jobs exported to CSV", {
                 description: `${filtered.length} row(s)`,
                 href: platformPath("/jobs"),
@@ -257,7 +246,7 @@ export default function JobsPage() {
                     Sup due
                   </th>
                   {canDeleteJob && (
-                    <th className="min-w-[72px] px-2 py-2.5 text-center text-xs font-semibold text-gray-700">Del</th>
+                    <th className="min-w-[72px] px-2 py-2.5 text-center text-xs font-semibold text-gray-700">Bin</th>
                   )}
                 </tr>
               </thead>
@@ -387,13 +376,16 @@ export default function JobsPage() {
                         <td className="px-1 py-2 text-center">
                           <button
                             type="button"
-                            title="Delete job permanently (Nik only)"
+                            title="Move job to deleted bin (90 days in Settings)"
                             className="inline-flex items-center justify-center rounded-lg border border-red-200 bg-white p-1 text-red-700 hover:bg-red-50"
                             onClick={() => {
-                              const msg = `Permanently delete job ${d.jobNumber}? This cannot be undone.`;
+                              const msg = `Move job ${d.jobNumber} to the deleted bin? It will stay there for 90 days; you can restore it from Settings → Deleted jobs.`;
                               if (!window.confirm(msg)) return;
-                              setJobs((prev) => prev.filter((j) => j.id !== d.id));
-                              notifySuccess("Job deleted", { href: platformPath("/jobs") });
+                              softDeleteJob(d, user?.name);
+                              notifySuccess("Job moved to deleted bin", {
+                                description: "Restore within 90 days under Settings → Deleted jobs.",
+                                href: platformPath("/settings"),
+                              });
                             }}
                           >
                             <Trash2 size={14} aria-hidden />

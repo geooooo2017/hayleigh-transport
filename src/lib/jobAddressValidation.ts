@@ -46,17 +46,17 @@ function postcodeIssues(pc: string | undefined, routeType: Job["routeType"], sid
 export function getJobAddressIssues(j: JobAddressFields): string[] {
   const issues: string[] = [];
   if (!nonEmpty(j.collectionAddressLines)) issues.push("Collection address");
-  if (!nonEmpty(j.collectionContactName)) issues.push("Collection contact name");
   if (!nonEmpty(j.collectionContactPhone)) issues.push("Collection contact phone");
-  if (!nonEmpty(j.collectionContactEmail)) issues.push("Collection contact email");
-  else if (!looseEmailOk(j.collectionContactEmail)) issues.push("Collection contact email (invalid format)");
+  if (nonEmpty(j.collectionContactEmail) && !looseEmailOk(j.collectionContactEmail)) {
+    issues.push("Collection contact email (invalid format)");
+  }
   issues.push(...postcodeIssues(j.collectionPostcode, j.routeType, "Collection"));
 
   if (!nonEmpty(j.deliveryAddressLines)) issues.push("Delivery address");
-  if (!nonEmpty(j.deliveryContactName)) issues.push("Delivery contact name");
   if (!nonEmpty(j.deliveryContactPhone)) issues.push("Delivery contact phone");
-  if (!nonEmpty(j.deliveryContactEmail)) issues.push("Delivery contact email");
-  else if (!looseEmailOk(j.deliveryContactEmail)) issues.push("Delivery contact email (invalid format)");
+  if (nonEmpty(j.deliveryContactEmail) && !looseEmailOk(j.deliveryContactEmail)) {
+    issues.push("Delivery contact email (invalid format)");
+  }
   issues.push(...postcodeIssues(j.deliveryPostcode, j.routeType, "Delivery"));
 
   return issues;
@@ -69,10 +69,10 @@ export function isJobAddressComplete(j: JobAddressFields): boolean {
 export function getCollectionAddressIssues(j: JobAddressFields): string[] {
   const issues: string[] = [];
   if (!nonEmpty(j.collectionAddressLines)) issues.push("Collection address");
-  if (!nonEmpty(j.collectionContactName)) issues.push("Collection contact name");
   if (!nonEmpty(j.collectionContactPhone)) issues.push("Collection contact phone");
-  if (!nonEmpty(j.collectionContactEmail)) issues.push("Collection contact email");
-  else if (!looseEmailOk(j.collectionContactEmail)) issues.push("Collection contact email (invalid format)");
+  if (nonEmpty(j.collectionContactEmail) && !looseEmailOk(j.collectionContactEmail)) {
+    issues.push("Collection contact email (invalid format)");
+  }
   issues.push(...postcodeIssues(j.collectionPostcode, j.routeType, "Collection"));
   return issues;
 }
@@ -80,10 +80,10 @@ export function getCollectionAddressIssues(j: JobAddressFields): string[] {
 export function getDeliveryAddressIssues(j: JobAddressFields): string[] {
   const issues: string[] = [];
   if (!nonEmpty(j.deliveryAddressLines)) issues.push("Delivery address");
-  if (!nonEmpty(j.deliveryContactName)) issues.push("Delivery contact name");
   if (!nonEmpty(j.deliveryContactPhone)) issues.push("Delivery contact phone");
-  if (!nonEmpty(j.deliveryContactEmail)) issues.push("Delivery contact email");
-  else if (!looseEmailOk(j.deliveryContactEmail)) issues.push("Delivery contact email (invalid format)");
+  if (nonEmpty(j.deliveryContactEmail) && !looseEmailOk(j.deliveryContactEmail)) {
+    issues.push("Delivery contact email (invalid format)");
+  }
   issues.push(...postcodeIssues(j.deliveryPostcode, j.routeType, "Delivery"));
   return issues;
 }

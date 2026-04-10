@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { MapPin, Truck } from "lucide-react";
 import { MissingFieldLegend, ReqStar, WhyThisSection } from "../../components/FormGuidance";
@@ -16,8 +16,6 @@ export default function DriverLoginPage() {
   const [driverName, setDriverName] = useState("");
   const [vehicle, setVehicle] = useState("");
   const [jobNumbers, setJobNumbers] = useState("");
-  /** DEMO: remove when live-tracking demo is no longer needed */
-  const [demoLiveTracking, setDemoLiveTracking] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
 
@@ -25,14 +23,10 @@ export default function DriverLoginPage() {
     () => ({
       name: !driverName.trim(),
       vehicle: !vehicle.trim(),
-      jobs: !demoLiveTracking && !jobNumbers.trim(),
+      jobs: !jobNumbers.trim(),
     }),
-    [driverName, vehicle, demoLiveTracking, jobNumbers]
+    [driverName, vehicle, jobNumbers]
   );
-
-  useEffect(() => {
-    if (demoLiveTracking) setJobNumbers("");
-  }, [demoLiveTracking]);
 
   const onSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -43,17 +37,6 @@ export default function DriverLoginPage() {
       const reg = vehicle.trim();
       if (!name || !reg) {
         setError("Enter your name and vehicle registration.");
-        return;
-      }
-
-      if (demoLiveTracking) {
-        writeDriverSession({
-          driverName: name,
-          vehicleReg: reg,
-          jobIds: [],
-          demoLiveTracking: true,
-        });
-        navigate("/driver/app", { replace: true });
         return;
       }
 
@@ -140,29 +123,8 @@ export default function DriverLoginPage() {
                 inputMode="text"
                 required
               />
-              <p className="mt-2 text-sm text-gray-500 sm:text-xs">
-                {demoLiveTracking
-                  ? "Any registration you type — used only to identify your dot on the map."
-                  : "Must match the truck plates saved on the job."}
-              </p>
+              <p className="mt-2 text-sm text-gray-500 sm:text-xs">Must match the truck plates saved on the job.</p>
             </div>
-
-            {/* DEMO: remove this block when live-tracking demo is no longer needed */}
-            <label className="flex cursor-pointer items-start gap-3 rounded-xl border-2 border-amber-200 bg-amber-50/80 p-4 sm:p-3">
-              <input
-                type="checkbox"
-                checked={demoLiveTracking}
-                onChange={(e) => setDemoLiveTracking(e.target.checked)}
-                className="mt-1 h-5 w-5 shrink-0 rounded border-gray-300 text-ht-slate focus:ring-ht-slate"
-              />
-              <span className="text-base leading-snug text-amber-950 sm:text-sm">
-                <span className="font-semibold">Demo: test live map without a job</span>
-                <span className="mt-1 block text-sm text-amber-900/90 sm:text-xs">
-                  Office Live Tracking will show your green GPS dot after you sign in and tap “Share my location”. Remove this
-                  option later for production.
-                </span>
-              </span>
-            </label>
 
             <div>
               <label htmlFor="driver-jobs" className="mb-2 block text-base font-medium text-gray-800 sm:mb-1 sm:text-sm">
@@ -174,16 +136,12 @@ export default function DriverLoginPage() {
                 value={jobNumbers}
                 onChange={(e) => setJobNumbers(e.target.value)}
                 rows={4}
-                className={`${fieldClass} min-h-[7.5rem] resize-y sm:min-h-0 disabled:bg-gray-100 disabled:text-gray-500`}
+                className={`${fieldClass} min-h-[7.5rem] resize-y sm:min-h-0`}
                 placeholder="One per line, or separated by commas"
                 enterKeyHint="done"
                 inputMode="text"
-                required={!demoLiveTracking}
-                disabled={demoLiveTracking}
+                required
               />
-              {demoLiveTracking && (
-                <p className="mt-2 text-sm text-gray-500 sm:text-xs">Not required in demo mode.</p>
-              )}
             </div>
             <Btn
               type="submit"

@@ -1,13 +1,14 @@
 import { useEffect, useMemo, useState } from "react";
 import { notifyError, notifySuccess } from "../lib/platformNotify";
-import { AlertTriangle, Building2, KeyRound, Percent } from "lucide-react";
+import { AlertTriangle, Archive, Building2, KeyRound, RotateCcw, Trash2 } from "lucide-react";
 import { MissingFieldLegend, ReqStar, WhyThisSection } from "../components/FormGuidance";
 import { Btn, Card } from "../components/Layout";
-import { BIBBY_SETTINGS_WHY, REQ, SETTINGS_COMPANY_WHY, SETTINGS_PASSWORD_WHY } from "../lib/fieldRequirementCopy";
-import { bibbyTotalDiscountAprPercent, type BibbyTerms } from "../lib/bibbyFinancing";
-import { getUserBibbyTerms, saveUserBibbyTerms } from "../lib/userBibbySettings";
+import { REQ, SETTINGS_COMPANY_WHY, SETTINGS_PASSWORD_WHY } from "../lib/fieldRequirementCopy";
 import { useAuth } from "../context/AuthContext";
 import { platformPath } from "../routes/paths";
+import { useJobRecycleBin } from "../context/JobsContext";
+import { daysRemainingInBin } from "../lib/deletedJobsBin";
+import { formatJobCardDate } from "../lib/jobAddress";
 import { userCanDeleteJobs } from "../lib/permissions";
 import {
   getUserCompanyDetails,
@@ -17,6 +18,7 @@ import {
 
 export default function SettingsPage() {
   const { user, changePassword } = useAuth();
+  const { deletedBin, restoreJobFromBin, permanentlyRemoveFromBin } = useJobRecycleBin();
 
   const [companyForm, setCompanyForm] = useState<UserCompanyDetails>(() => getUserCompanyDetails(user?.id));
   useEffect(() => {
@@ -26,34 +28,6 @@ export default function SettingsPage() {
   const [currentPw, setCurrentPw] = useState("");
   const [newPw, setNewPw] = useState("");
   const [confirmPw, setConfirmPw] = useState("");
-
-  const [bibbyTerms, setBibbyTerms] = useState<BibbyTerms>(() => getUserBibbyTerms(user?.id));
-  useEffect(() => {
-    setBibbyTerms(getUserBibbyTerms(user?.id));
-  }, [user?.id]);
-
-  const setBibby = <K extends keyof BibbyTerms>(key: K, value: BibbyTerms[K]) => {
-    setBibbyTerms((prev) => ({ ...prev, [key]: value }));
-  };
-
-  const onSaveBibbyTerms = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!user) return;
-    const t = bibbyTerms;
-    if (t.prepaymentPercent < 0 || t.prepaymentPercent > 100) {
-      notifyError("Prepayment must be between 0 and 100%.");
-      return;
-    }
-    if ([t.serviceFeePercent, t.badDebtProtectionPercent, t.discountFeePercent, t.bankBaseRatePercent].some((n) => n < 0 || n > 100)) {
-      notifyError("Fee percentages must be between 0 and 100.");
-      return;
-    }
-    saveUserBibbyTerms(user.id, t);
-    notifySuccess("Invoice financing terms saved", {
-      description: "Job costing uses these rates from now on.",
-      href: platformPath("/settings"),
-    });
-  };
 
   const onChangePassword = (e: React.FormEvent) => {
     e.preventDefault();
@@ -218,99 +192,6 @@ export default function SettingsPage() {
 
       <Card className="space-y-4 p-6">
         <h2 className="flex items-center gap-2 font-semibold">
-          <Percent className="h-5 w-5 text-ht-slate" aria-hidden />
-          Invoice financing (Bibby-style terms)
-        </h2>
-        <WhyThisSection>{BIBBY_SETTINGS_WHY}</WhyThisSection>
-        <p className="text-sm text-gray-600">
-          Saved per user on this device. Adjust to match your agreement (prepayment %, service fee, optional bad debt
-          protection, discount margin, Bank of England base rate). Example: 85% prepayment, 0.95% service, 1.13% BDP, 2.99%
-          + 3.75% = 6.74% total discount APR on drawn funds.
-        </p>
-        <form onSubmit={onSaveBibbyTerms} className="max-w-lg space-y-3">
-          <div className="grid gap-3 sm:grid-cols-2">
-            <div>
-              <label className="mb-1 block text-sm font-medium text-gray-700">Prepayment %</label>
-              <input
-                type="number"
-                step="0.01"
-                min={0}
-                max={100}
-                value={bibbyTerms.prepaymentPercent}
-                onChange={(e) => setBibby("prepaymentPercent", parseFloat(e.target.value) || 0)}
-                className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm"
-              />
-            </div>
-            <div>
-              <label className="mb-1 block text-sm font-medium text-gray-700">Service fee % (on invoice)</label>
-              <input
-                type="number"
-                step="0.01"
-                min={0}
-                max={100}
-                value={bibbyTerms.serviceFeePercent}
-                onChange={(e) => setBibby("serviceFeePercent", parseFloat(e.target.value) || 0)}
-                className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm"
-              />
-            </div>
-            <div>
-              <label className="mb-1 block text-sm font-medium text-gray-700">Bad debt protection %</label>
-              <input
-                type="number"
-                step="0.01"
-                min={0}
-                max={100}
-                value={bibbyTerms.badDebtProtectionPercent}
-                onChange={(e) => setBibby("badDebtProtectionPercent", parseFloat(e.target.value) || 0)}
-                className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm"
-              />
-            </div>
-            <div>
-              <label className="mb-1 block text-sm font-medium text-gray-700">Discount fee % (margin)</label>
-              <input
-                type="number"
-                step="0.01"
-                min={0}
-                max={100}
-                value={bibbyTerms.discountFeePercent}
-                onChange={(e) => setBibby("discountFeePercent", parseFloat(e.target.value) || 0)}
-                className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm"
-              />
-            </div>
-            <div>
-              <label className="mb-1 block text-sm font-medium text-gray-700">Bank of England base rate %</label>
-              <input
-                type="number"
-                step="0.01"
-                min={0}
-                max={100}
-                value={bibbyTerms.bankBaseRatePercent}
-                onChange={(e) => setBibby("bankBaseRatePercent", parseFloat(e.target.value) || 0)}
-                className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm"
-              />
-            </div>
-            <div className="flex items-end">
-              <div className="w-full rounded-lg border border-dashed border-gray-300 bg-gray-50 px-3 py-2 text-sm">
-                <span className="text-gray-500">Total discount (inc. base)</span>
-                <div className="font-semibold text-gray-900">{bibbyTotalDiscountAprPercent(bibbyTerms).toFixed(2)}% p.a.</div>
-              </div>
-            </div>
-          </div>
-          <label className="flex cursor-pointer items-center gap-2 text-sm text-gray-800">
-            <input
-              type="checkbox"
-              checked={bibbyTerms.includeBadDebtProtection}
-              onChange={(e) => setBibby("includeBadDebtProtection", e.target.checked)}
-              className="rounded border-gray-300"
-            />
-            Include bad debt protection in job costing
-          </label>
-          <Btn type="submit">Save financing terms</Btn>
-        </form>
-      </Card>
-
-      <Card className="space-y-4 p-6">
-        <h2 className="flex items-center gap-2 font-semibold">
           <KeyRound className="h-5 w-5 text-ht-slate" aria-hidden />
           Change password
         </h2>
@@ -369,26 +250,100 @@ export default function SettingsPage() {
         </form>
       </Card>
 
+      <Card className="space-y-4 p-6">
+        <h2 className="flex items-center gap-2 font-semibold text-gray-900">
+          <Archive className="h-5 w-5 shrink-0 text-ht-slate" aria-hidden />
+          Deleted jobs (90 days)
+        </h2>
+        <p className="text-sm text-gray-600">
+          Jobs you remove from the jobs list or job detail page are kept here for <strong>90 days</strong>, then removed
+          automatically. Restore puts the job back on the board; <strong>Erase forever</strong> deletes it immediately for
+          everyone (including cloud sync).
+        </p>
+        {userCanDeleteJobs(user) ? (
+          deletedBin.length === 0 ? (
+            <p className="rounded-lg border border-dashed border-gray-200 bg-gray-50 px-4 py-6 text-center text-sm text-gray-500">
+              No jobs in the bin.
+            </p>
+          ) : (
+            <ul className="space-y-3">
+              {deletedBin.map((e) => {
+                const j = e.job;
+                const left = daysRemainingInBin(e.deletedAt);
+                return (
+                  <li
+                    key={`${j.id}-${e.deletedAt}`}
+                    className="rounded-xl border border-gray-200 bg-white p-4 shadow-sm"
+                  >
+                    <div className="flex flex-wrap items-start justify-between gap-3">
+                      <div>
+                        <div className="font-semibold text-ht-slate">{j.jobNumber}</div>
+                        <div className="mt-1 space-y-0.5 text-xs text-gray-600">
+                          <div>Customer job no.: {j.customerInvoiceRef?.trim() || "—"}</div>
+                          <div>Collection: {formatJobCardDate(j.collectionDate)}</div>
+                          <div>
+                            Postcodes: {(j.collectionPostcode ?? "").trim() || "—"} → {(j.deliveryPostcode ?? "").trim() || "—"}
+                          </div>
+                          <div className="text-gray-500">
+                            Deleted {new Date(e.deletedAt).toLocaleString("en-GB")} {e.deletedBy ? `· ${e.deletedBy}` : ""}
+                          </div>
+                          <div className="font-medium text-amber-800">{left} day{left === 1 ? "" : "s"} until auto-removal</div>
+                        </div>
+                      </div>
+                      <div className="flex flex-wrap gap-2">
+                        <Btn
+                          type="button"
+                          variant="outline"
+                          className="gap-1.5 text-sm"
+                          onClick={() => {
+                            restoreJobFromBin(j.id);
+                            notifySuccess("Job restored", { description: j.jobNumber, href: platformPath("/jobs") });
+                          }}
+                        >
+                          <RotateCcw size={14} aria-hidden /> Restore
+                        </Btn>
+                        <Btn
+                          type="button"
+                          variant="outline"
+                          className="gap-1.5 border-red-200 text-sm text-red-800 hover:bg-red-50"
+                          onClick={() => {
+                            const msg = `Permanently erase ${j.jobNumber} from the bin? This cannot be undone.`;
+                            if (!window.confirm(msg)) return;
+                            permanentlyRemoveFromBin(j.id);
+                            notifySuccess("Job removed from bin", { href: platformPath("/settings") });
+                          }}
+                        >
+                          <Trash2 size={14} aria-hidden /> Erase forever
+                        </Btn>
+                      </div>
+                    </div>
+                  </li>
+                );
+              })}
+            </ul>
+          )
+        ) : (
+          <p className="text-sm text-gray-500">Sign in to manage deleted jobs.</p>
+        )}
+      </Card>
+
       <Card className="border-amber-200 bg-amber-50/80 p-6">
         <h2 className="flex items-center gap-2 font-semibold text-amber-950">
           <AlertTriangle className="h-5 w-5 shrink-0 text-amber-700" aria-hidden />
-          Deleting jobs from the system
+          Deleting jobs
         </h2>
         <div className="mt-3 space-y-2 text-sm text-amber-950">
           <p>
-            <strong className="text-amber-900">Warning:</strong> Removing a job permanently deletes it for the whole team
-            (including cloud sync). This cannot be undone.
+            <strong className="text-amber-900">Note:</strong> “Delete” moves a job to this bin for 90 days — it is not gone
+            immediately unless you erase it here or wait for expiry.
           </p>
           {userCanDeleteJobs(user) ? (
             <p className="font-medium text-amber-900">
-              You are signed in as <strong>Nik</strong> — you may delete jobs from the Jobs table or the job detail page.
-              Always confirm with the office before deleting live work.
+              Signed-in staff can move jobs to the bin from the Jobs table or job detail page. Confirm with the office before
+              removing live work.
             </p>
           ) : (
-            <p>
-              Only <strong>Nik</strong> (signed in as Nik) can delete jobs. Everyone else should ask Nik to remove a job
-              if it was created by mistake. You will not see a delete option on jobs.
-            </p>
+            <p>Sign in as staff to delete or restore jobs.</p>
           )}
         </div>
       </Card>

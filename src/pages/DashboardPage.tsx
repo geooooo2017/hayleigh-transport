@@ -1,7 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
-import { ClipboardList, MapPin, Plus, Smartphone, Truck, Users } from "lucide-react";
-import { useAuth } from "../context/AuthContext";
+import { ClipboardList, MapPin, Plus, Truck, Users } from "lucide-react";
 import { useLocalStorage } from "../hooks/useLocalStorage";
 import { useJobs } from "../context/JobsContext";
 import type { Customer, Driver, Job, Vehicle } from "../types";
@@ -10,12 +9,6 @@ import { formatAddressSummary } from "../lib/jobAddress";
 import { fetchDriverPositionsForMap } from "../lib/driverPositionsApi";
 import { FleetMap, type FleetDriverPin } from "../components/FleetMap";
 import { Btn, Card } from "../components/Layout";
-import {
-  applyMobileTrackingTestProject,
-  MOBILE_TEST_JOB_ID,
-  MOBILE_TEST_JOB_NUMBER,
-} from "../lib/mobileTrackingTestProject";
-import { notifySuccess } from "../lib/platformNotify";
 import { platformPath } from "../routes/paths";
 
 function statusRank(s: Job["status"]): number {
@@ -24,21 +17,10 @@ function statusRank(s: Job["status"]): number {
   return 2;
 }
 
-function readLs<T>(key: string, fallback: T): T {
-  try {
-    const raw = localStorage.getItem(key);
-    if (raw == null) return fallback;
-    return JSON.parse(raw) as T;
-  } catch {
-    return fallback;
-  }
-}
-
 export default function DashboardPage() {
-  const { user } = useAuth();
-  const [customers, setCustomers] = useLocalStorage<Customer[]>("customers", []);
-  const [drivers, setDrivers] = useLocalStorage<Driver[]>("drivers", []);
-  const [vehicles, setVehicles] = useLocalStorage<Vehicle[]>("vehicles", []);
+  const [customers] = useLocalStorage<Customer[]>("customers", []);
+  const [drivers] = useLocalStorage<Driver[]>("drivers", []);
+  const [vehicles] = useLocalStorage<Vehicle[]>("vehicles", []);
   const [jobs, setJobs] = useJobs();
   const [driverPins, setDriverPins] = useState<FleetDriverPin[]>([]);
 
@@ -80,70 +62,6 @@ export default function DashboardPage() {
           available. Updates about every 8 seconds.
         </p>
       </div>
-
-      <Card className="border-2 border-emerald-200/90 bg-gradient-to-br from-emerald-50/90 to-white p-5">
-        <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
-          <div>
-            <h2 className="flex items-center gap-2 text-lg font-semibold text-emerald-950">
-              <Smartphone className="shrink-0 text-emerald-700" size={22} aria-hidden />
-              Mobile tracking test (George Sweeney → Mauchline)
-            </h2>
-            <p className="mt-2 text-sm text-emerald-950/90">
-              Loads one end-to-end demo job: <strong>Bellshill (ML4 1RZ)</strong> →{" "}
-              <strong>Mauchline (KA5 5DW)</strong>, <strong>completed</strong> with POD, supplier invoice, customer
-              invoice and payment — visible under <strong>Customer Invoicing</strong>, job timeline, and reports. Route
-              pins stay on the map for history.               For <strong>live GPS</strong> on the map, open the job and set status back
-              to <strong>In progress</strong>; driver app: George Sweeney / SG65 KDK / {MOBILE_TEST_JOB_NUMBER} (HTTPS +
-              Supabase). <strong>No customer login</strong> exists — your freight customer appears under{" "}
-              <Link className="font-medium text-emerald-800 underline" to={platformPath("/customers")}>
-                Customers
-              </Link>{" "}
-              (CRM); this button also adds that demo record.
-            </p>
-            <ul className="mt-3 list-inside list-disc space-y-1 text-sm text-emerald-950/85">
-              <li>
-                <strong>Driver sign-in:</strong>{" "}
-                <Link className="font-medium text-emerald-800 underline" to="/driver">
-                  /driver
-                </Link>{" "}
-                — Name: <code className="rounded bg-white/80 px-1">George Sweeney</code>, Reg:{" "}
-                <code className="rounded bg-white/80 px-1">SG65 KDK</code> (or SG65KDK), Job:{" "}
-                <code className="rounded bg-white/80 px-1">{MOBILE_TEST_JOB_NUMBER}</code>
-              </li>
-              <li>
-                <strong>Office:</strong> open{" "}
-                <Link className="font-medium text-emerald-800 underline" to={platformPath("/live-tracking")}>
-                  Live Tracking
-                </Link>{" "}
-                or the map below — enable location on the phone after sign-in.
-              </li>
-            </ul>
-          </div>
-          <div className="flex shrink-0 flex-col gap-2">
-            <Btn
-              type="button"
-              className="gap-2 bg-emerald-700 text-white hover:bg-emerald-800"
-              onClick={() => {
-                applyMobileTrackingTestProject(setJobs, user?.name ?? "Nik");
-                setDrivers(readLs<Driver[]>("drivers", []));
-                setVehicles(readLs<Vehicle[]>("vehicles", []));
-                setCustomers(readLs<Customer[]>("customers", []));
-                notifySuccess("Mobile test job loaded", {
-                  description: `${MOBILE_TEST_JOB_NUMBER} — completed & invoiced demo. Try Customer Invoicing or job detail timeline; use In progress for live map.`,
-                  href: platformPath(`/jobs/${MOBILE_TEST_JOB_ID}`),
-                });
-              }}
-            >
-              Load / refresh test job
-            </Btn>
-            <Link to={platformPath(`/jobs/${MOBILE_TEST_JOB_ID}`)}>
-              <Btn variant="outline" className="w-full gap-2" type="button">
-                Open test job
-              </Btn>
-            </Link>
-          </div>
-        </div>
-      </Card>
 
       {empty && (
         <Card className="border-2 border-ht-border bg-gradient-to-br from-ht-canvas to-white p-6">

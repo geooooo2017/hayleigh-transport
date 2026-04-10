@@ -1,7 +1,6 @@
 import { jsPDF } from "jspdf";
 import type { Job } from "../types";
-import { COMPANY_LEGAL_NAME, LOGO_PATH } from "./companyBrand";
-import { formatAddressBlock } from "./jobAddress";
+import { LOGO_PATH } from "./companyBrand";
 import { defaultExportCompanyDetails, type UserCompanyDetails } from "./userCompanyProfile";
 
 export type BookingPdfIssuer = {
@@ -9,11 +8,15 @@ export type BookingPdfIssuer = {
   preparedBy?: string;
 };
 
-const MARGIN = 15;
+const MARGIN = 10;
 const PAGE_W = 210;
-const MAX_TEXT_W = PAGE_W - 2 * MARGIN;
-const LINE_MM = 5;
-const FOOTER_MAX_Y = 275;
+const PAGE_H = 297;
+const CONTENT_W = PAGE_W - 2 * MARGIN;
+/** Leave room for footer note */
+const Y_MAX = 278;
+const LINE_MM_8 = 3.6;
+const BOX_TITLE_H = 5.5;
+const PAD = 2.5;
 
 function fmtDate(s: string): string {
   if (!s?.trim()) return "—";
@@ -23,6 +26,11 @@ function fmtDate(s: string): string {
 
 function fmtMoney(n: number): string {
   return `£${Number(n).toFixed(2)}`;
+}
+
+function dash(s: string | undefined): string {
+  const t = (s ?? "").trim();
+  return t || "—";
 }
 
 async function loadLogoPngDataUrl(): Promise<string | null> {
@@ -63,77 +71,280 @@ async function loadLogoPngDataUrl(): Promise<string | null> {
   }
 }
 
-function nextPageIfNeeded(doc: jsPDF, y: number, blockMm: number): number {
-  if (y + blockMm > FOOTER_MAX_Y) {
+function ensureY(doc: jsPDF, y: number, needMm: number): number {
+  if (y + needMm > Y_MAX) {
     doc.addPage();
     return MARGIN;
   }
   return y;
 }
 
-function drawSectionTitle(doc: jsPDF, title: string, y: number): number {
-  y = nextPageIfNeeded(doc, y, 12);
+/** Label: value lines, 8pt */
+function addKv(doc: jsPDF, x: number, y: number, w: number, label: string, value: string): number {
   doc.setFont("helvetica", "bold");
-  doc.setFontSize(11);
-  doc.text(title, MARGIN, y);
+  doc.setFontSize(8);
+  const prefix = `${label}:`;
+  const prefixW = doc.getTextWidth(prefix) + 1.5;
+  doc.text(prefix, x, y);
   doc.setFont("helvetica", "normal");
-  return y + 7;
+  const v = value.trim() || "—";
+  const lines = doc.splitTextToSize(v, w - prefixW);
+  doc.text(lines, x + prefixW, y);
+  return y + Math.max(1, lines.length) * LINE_MM_8;
 }
 
-function addParagraph(doc: jsPDF, text: string, y: number, fontSize = 10): number {
-  doc.setFontSize(fontSize);
-  const lines = doc.splitTextToSize((text || "").trim() || "—", MAX_TEXT_W);
-  y = nextPageIfNeeded(doc, y, lines.length * LINE_MM + 2);
-  doc.text(lines, MARGIN, y);
-  return y + lines.length * LINE_MM + 3;
-}
-
-function addIssuerContactBlock(doc: jsPDF, y: number, d: UserCompanyDetails, preparedBy?: string): number {
+function addMultilineBlock(doc: jsPDF, x: number, y: number, w: number, text: string): number {
   doc.setFont("helvetica", "normal");
   doc.setFontSize(8);
-  doc.setTextColor(90);
-  const lines: string[] = [];
-  const t = (s: string) => s.trim();
-  if (t(d.companyLegalName)) lines.push(t(d.companyLegalName));
-  if (t(d.telephone)) lines.push(`Tel: ${t(d.telephone)}`);
-  if (t(d.mobile)) lines.push(`Mob: ${t(d.mobile)}`);
-  if (t(d.email)) lines.push(`Email: ${t(d.email)}`);
-  if (t(d.website)) lines.push(`Website: ${t(d.website)}`);
-  lines.push("");
-  lines.push("Company details");
-  if (t(d.companyNumber)) lines.push(`Company Number: ${t(d.companyNumber)}`);
-  if (t(d.vatNumber)) lines.push(`GB VAT Number: ${t(d.vatNumber)}`);
-  if (t(d.eoriNumber)) lines.push(`EORI Number: ${t(d.eoriNumber)}`);
-  if (t(preparedBy ?? "")) {
-    lines.push("");
-    lines.push(`Prepared by: ${t(preparedBy!)}`);
+  if (!text.trim()) {
+    doc.text("—", x, y);
+    return y + LINE_MM_8;
   }
-  for (const line of lines) {
-    if (line === "") {
-      y += 2;
-      continue;
-    }
-    y = nextPageIfNeeded(doc, y, 6);
-    doc.text(line, MARGIN, y);
-    y += 4;
+  const parts = text.split(/\n+/).map((p) => p.trim()).filter(Boolean);
+  if (parts.length === 0) {
+    doc.text("—", x, y);
+    return y + LINE_MM_8;
   }
+  let cy = y;
+  for (const p of parts) {
+    const lines = doc.splitTextToSize(p, w);
+    doc.text(lines, x, cy);
+    cy += lines.length * LINE_MM_8;
+  }
+  return cy;
+}
+
+/**
+ * Draw a titled section with border. `drawInner` starts below title bar; returns next Y inside box (before bottom pad).
+ */
+function drawTitledBox(
+  doc: jsPDF,
+  x: number,
+  yTop: number,
+  w: number,
+  title: string,
+  drawInner: (innerY: number, innerX: number, innerW: number) => number
+): number {
+  const innerX = x + PAD;
+  const innerW = w - 2 * PAD;
+  let y = yTop + BOX_TITLE_H;
+  doc.setFillColor(236, 240, 245);
+  doc.roundedRect(x, yTop, w, BOX_TITLE_H, 1, 1, "F");
+  doc.setFont("helvetica", "bold");
+  doc.setFontSize(8.5);
+  doc.setTextColor(30, 41, 59);
+  doc.text(title, innerX, yTop + 4);
+  doc.setTextColor(0, 0, 0);
+  y = drawInner(y + 1, innerX, innerW);
+  y += PAD;
+  doc.setDrawColor(55, 70, 85);
+  doc.setLineWidth(0.45);
+  doc.roundedRect(x, yTop, w, y - yTop, 1.2, 1.2, "S");
+  doc.setDrawColor(0);
+  doc.setLineWidth(0.2);
+  return y + 2.5;
+}
+
+function streetPostcode(job: Job, side: "collection" | "delivery"): string {
+  if (side === "collection") {
+    return [job.collectionAddressLines?.trim(), job.collectionPostcode?.trim()].filter(Boolean).join("\n");
+  }
+  return [job.deliveryAddressLines?.trim(), job.deliveryPostcode?.trim()].filter(Boolean).join("\n");
+}
+
+async function addCompactLetterhead(doc: jsPDF, y: number, details: UserCompanyDetails, preparedBy?: string): Promise<number> {
+  const logoW = 22;
+  const logoH = (logoW * 200) / 300;
+  const logo = await loadLogoPngDataUrl();
+  if (logo) {
+    doc.addImage(logo, "PNG", MARGIN, y, logoW, logoH);
+  }
+  doc.setFont("helvetica", "bold");
+  doc.setFontSize(9);
+  doc.text(details.companyLegalName.trim().toUpperCase() || "HAYLEIGH TRANSPORT", MARGIN + logoW + 3, y + 4);
+  doc.setFont("helvetica", "normal");
+  doc.setFontSize(7.5);
+  doc.setTextColor(80);
+  const bits = [details.telephone && `Tel ${details.telephone}`, details.email].filter(Boolean).join(" · ");
+  if (bits) doc.text(bits, MARGIN + logoW + 3, y + 8);
+  if (preparedBy?.trim()) doc.text(`Prepared by: ${preparedBy.trim()}`, MARGIN + logoW + 3, y + 11.5);
   doc.setTextColor(0);
-  return y + 2;
+  return y + Math.max(logo ? logoH : 0, 14) + 3;
 }
 
-function addFooter(doc: jsPDF, variant: "customer" | "supplier") {
-  const msg =
-    variant === "customer"
-      ? "This document summarises the agreed commercial terms for the transport service described. VAT will be charged in line with your agreement."
-      : "Confidential — supplier copy. Agreed buy rate as shown. Not for customer distribution.";
-  const lines = doc.splitTextToSize(msg, MAX_TEXT_W);
-  doc.setFontSize(8);
-  doc.setTextColor(110);
+function addFooterNote(doc: jsPDF, lines: string[]) {
+  doc.setFontSize(7);
+  doc.setTextColor(100);
   const last = doc.getNumberOfPages();
   doc.setPage(last);
-  const y = 292 - (lines.length - 1) * 3.6;
-  doc.text(lines, MARGIN, y);
+  const joined = lines.join(" ");
+  const wrapped = doc.splitTextToSize(joined, CONTENT_W);
+  let fy = PAGE_H - 12 - (wrapped.length - 1) * 3.2;
+  doc.text(wrapped, MARGIN, fy);
   doc.setTextColor(0);
+}
+
+export type BookingFormMode = "combined" | "customer" | "supplier";
+
+async function buildTransportBookingFormPdf(job: Job, issuer: BookingPdfIssuer | undefined, mode: BookingFormMode): Promise<jsPDF> {
+  const doc = new jsPDF({ unit: "mm", format: "a4" });
+  const details = issuer?.details ?? defaultExportCompanyDetails();
+  const preparedBy = issuer?.preparedBy;
+
+  let y = MARGIN;
+  y = await addCompactLetterhead(doc, y, details, preparedBy);
+
+  y = ensureY(doc, y, 14);
+  doc.setFont("helvetica", "bold");
+  doc.setFontSize(12);
+  doc.text("TRANSPORT BOOKING FORM", MARGIN, y);
+  y += 6;
+  doc.setFont("helvetica", "normal");
+  doc.setFontSize(7.5);
+  doc.setTextColor(70);
+  if (mode === "combined") {
+    doc.text("Customer booking details and internal supplier section on this sheet. Boxed sections match the standard booking template.", MARGIN, y);
+  } else if (mode === "customer") {
+    doc.text("Customer copy — pricing and journey details.", MARGIN, y);
+  } else {
+    doc.text("Supplier / carrier instruction — includes agreed cost and vehicle details.", MARGIN, y);
+  }
+  doc.setTextColor(0);
+  y += 5;
+
+  const routeLabel = job.routeType === "international" ? "International" : "Domestic";
+  const vehicleType = dash(job.vehicleType);
+
+  y = ensureY(doc, y, 40);
+  y = drawTitledBox(doc, MARGIN, y, CONTENT_W, "Job summary", (iy, ix, iw) => {
+    let cy = iy;
+    cy = addKv(doc, ix, cy, iw, "Job reference", job.jobNumber);
+    cy = addKv(doc, ix, cy, iw, "Customer", job.customerName);
+    cy = addKv(doc, ix, cy, iw, "Route", routeLabel);
+    cy = addKv(doc, ix, cy, iw, "Collection date", fmtDate(job.collectionDate));
+    cy = addKv(doc, ix, cy, iw, "Delivery date", fmtDate(job.deliveryDate));
+    if (job.scheduledDay) cy = addKv(doc, ix, cy, iw, "Scheduled day (board)", job.scheduledDay);
+    cy = addKv(doc, ix, cy, iw, "Vehicle type", vehicleType);
+    return cy;
+  });
+
+  const colGap = 3;
+  const colW = (CONTENT_W - colGap) / 2;
+  const xL = MARGIN;
+  const xR = MARGIN + colW + colGap;
+
+  y = ensureY(doc, y, 55);
+  const rowY = y;
+  const bottomL = drawTitledBox(doc, xL, rowY, colW, "Collection details", (iy, ix, iw) => {
+    let cy = iy;
+    cy = addKv(doc, ix, cy, iw, "Contact name", dash(job.collectionContactName));
+    cy = addKv(doc, ix, cy, iw, "Phone", dash(job.collectionContactPhone));
+    cy = addKv(doc, ix, cy, iw, "Email", dash(job.collectionContactEmail));
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(8);
+    doc.text("Address:", ix, cy);
+    doc.setFont("helvetica", "normal");
+    cy = addMultilineBlock(doc, ix, cy + LINE_MM_8, iw, streetPostcode(job, "collection"));
+    cy = addKv(doc, ix, cy, iw, "Collection time window", dash(job.scheduledDay ? `Board: ${job.scheduledDay}` : undefined));
+    return cy;
+  });
+  const bottomR = drawTitledBox(doc, xR, rowY, colW, "Delivery details", (iy, ix, iw) => {
+    let cy = iy;
+    cy = addKv(doc, ix, cy, iw, "Contact name", dash(job.deliveryContactName));
+    cy = addKv(doc, ix, cy, iw, "Phone", dash(job.deliveryContactPhone));
+    cy = addKv(doc, ix, cy, iw, "Email", dash(job.deliveryContactEmail));
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(8);
+    doc.text("Address:", ix, cy);
+    doc.setFont("helvetica", "normal");
+    cy = addMultilineBlock(doc, ix, cy + LINE_MM_8, iw, streetPostcode(job, "delivery"));
+    cy = addKv(doc, ix, cy, iw, "Delivery time window", "—");
+    return cy;
+  });
+  y = Math.max(bottomL, bottomR);
+
+  y = ensureY(doc, y, 35);
+  y = drawTitledBox(doc, MARGIN, y, CONTENT_W, "Goods information", (iy, ix, iw) => {
+    let cy = iy;
+    cy = addKv(doc, ix, cy, iw, "Description of goods", "—");
+    cy = addKv(doc, ix, cy, iw, "Number of items / pallets", "—");
+    cy = addKv(doc, ix, cy, iw, "Weight (kg)", "—");
+    cy = addKv(doc, ix, cy, iw, "Fragile (Y/N)", "—");
+    cy = addKv(doc, ix, cy, iw, "Special instructions", "");
+    cy = addMultilineBlock(doc, ix, cy, iw, dash(job.notes));
+    return cy;
+  });
+
+  const sell = Number(job.sellPrice) || 0;
+  const fuel = Number(job.fuelSurcharge) || 0;
+  const extra = Number(job.extraCharges) || 0;
+  const total = sell + fuel + extra;
+
+  if (mode !== "supplier") {
+    y = ensureY(doc, y, 38);
+    y = drawTitledBox(doc, MARGIN, y, CONTENT_W, "Pricing (ex VAT)", (iy, ix, iw) => {
+      let cy = iy;
+      cy = addKv(doc, ix, cy, iw, "Transport fee", fmtMoney(sell));
+      cy = addKv(doc, ix, cy, iw, "Fuel surcharge", fmtMoney(fuel));
+      cy = addKv(doc, ix, cy, iw, "Additional charges", fmtMoney(extra));
+      doc.setFont("helvetica", "bold");
+      doc.setFontSize(9);
+      doc.text(`Total (ex VAT): ${fmtMoney(total)}`, ix, cy);
+      doc.setFont("helvetica", "normal");
+      doc.setFontSize(8);
+      return cy + LINE_MM_8 + 1;
+    });
+  } else {
+    y = ensureY(doc, y, 22);
+    y = drawTitledBox(doc, MARGIN, y, CONTENT_W, "Customer pricing (reference only, ex VAT)", (iy, ix, iw) => {
+      let cy = iy;
+      cy = addKv(doc, ix, cy, iw, "Total charged to customer", fmtMoney(total));
+      return cy;
+    });
+  }
+
+  const redactSupplier = mode === "customer";
+  y = ensureY(doc, y, 42);
+  y = drawTitledBox(doc, MARGIN, y, CONTENT_W, "Internal supplier section", (iy, ix, iw) => {
+    let cy = iy;
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(7.5);
+    doc.setTextColor(120, 30, 30);
+    doc.text("Confidential — office & carrier use. Not for customer distribution.", ix, cy);
+    doc.setTextColor(0);
+    cy += LINE_MM_8 + 1;
+    doc.setFont("helvetica", "normal");
+    doc.setFontSize(8);
+    if (redactSupplier) {
+      cy = addMultilineBlock(doc, ix, cy, iw, "Agreed supplier cost and carrier instructions are held on the office copy / separate instruction.");
+      return cy;
+    }
+    cy = addKv(doc, ix, cy, iw, "Carrier name", dash(job.carrier));
+    cy = addKv(doc, ix, cy, iw, "Driver name", dash(job.assignedDriverName));
+    cy = addKv(doc, ix, cy, iw, "Vehicle registration", dash(job.truckPlates));
+    cy = addKv(doc, ix, cy, iw, "Supplier cost (ex VAT)", fmtMoney(Number(job.buyPrice) || 0));
+    cy = addKv(doc, ix, cy, iw, "Handler", dash(job.handler));
+    cy = addKv(doc, ix, cy, iw, "Created", fmtDate(job.createdAt.includes("T") ? job.createdAt.slice(0, 10) : job.createdAt));
+    return cy;
+  });
+
+  const footerMsg =
+    mode === "combined"
+      ? [
+          "VAT will be charged in line with your agreement. Customer-facing pricing is shown under Pricing.",
+          "The internal supplier section is confidential.",
+        ]
+      : mode === "customer"
+        ? ["Customer copy. VAT as agreed. Supplier assignment is managed by the office."]
+        : ["Supplier copy. Agreed buy rate as shown. Not for customer distribution."];
+
+  addFooterNote(doc, footerMsg);
+  return doc;
+}
+
+/** Single PDF, one sheet (A4) where possible: template-style boxed sections, customer + internal supplier. */
+export async function buildCombinedBookingPdf(job: Job, issuer?: BookingPdfIssuer): Promise<jsPDF> {
+  return buildTransportBookingFormPdf(job, issuer, "combined");
 }
 
 export async function buildBookingPdf(
@@ -141,118 +352,7 @@ export async function buildBookingPdf(
   variant: "customer" | "supplier",
   issuer?: BookingPdfIssuer
 ): Promise<jsPDF> {
-  const doc = new jsPDF({ unit: "mm", format: "a4" });
-  let y = MARGIN;
-  const details = issuer?.details ?? defaultExportCompanyDetails();
-  const preparedBy = issuer?.preparedBy;
-
-  const logo = await loadLogoPngDataUrl();
-  if (logo) {
-    const logoW = 52;
-    const logoH = (logoW * 200) / 300;
-    doc.addImage(logo, "PNG", MARGIN, y, logoW, logoH);
-    y += logoH + 5;
-  } else {
-    doc.setFont("helvetica", "bold");
-    doc.setFontSize(14);
-    doc.text(details.companyLegalName.trim().toUpperCase() || "HAYLEIGH TRANSPORT", MARGIN, y + 4);
-    doc.setFont("helvetica", "normal");
-    doc.setFontSize(9);
-    doc.text(details.companyLegalName.trim() || COMPANY_LEGAL_NAME, MARGIN, y + 10);
-    y += 14;
-  }
-
-  y = addIssuerContactBlock(doc, y, details, preparedBy);
-
-  doc.setFont("helvetica", "bold");
-  doc.setFontSize(15);
-  doc.text(variant === "customer" ? "Transport booking confirmation" : "Supplier booking instruction", MARGIN, y);
-  y += 9;
-
-  doc.setFont("helvetica", "normal");
-  doc.setFontSize(10);
-  y = nextPageIfNeeded(doc, y, 16);
-  doc.setFillColor(245, 248, 250);
-  doc.roundedRect(MARGIN, y, PAGE_W - 2 * MARGIN, 11, 1.5, 1.5, "F");
-  doc.setFont("helvetica", "bold");
-  doc.text(`Job reference: ${job.jobNumber}`, MARGIN + 3, y + 7);
-  doc.setFont("helvetica", "normal");
-  y += 15;
-
-  y = drawSectionTitle(doc, "Journey details", y);
-  doc.setFontSize(10);
-  y = addParagraph(doc, `Route: ${job.routeType === "international" ? "International" : "Domestic"}`, y);
-  y = addParagraph(doc, `Collection date: ${fmtDate(job.collectionDate)}`, y);
-  y = addParagraph(doc, `Delivery date: ${fmtDate(job.deliveryDate)}`, y);
-  if (job.scheduledDay) {
-    y = addParagraph(doc, `Scheduled day (board): ${job.scheduledDay}`, y);
-  }
-
-  y = drawSectionTitle(doc, "Collection address", y);
-  y = addParagraph(doc, formatAddressBlock(job, "collection"), y);
-
-  y = drawSectionTitle(doc, "Delivery address", y);
-  y = addParagraph(doc, formatAddressBlock(job, "delivery"), y);
-
-  if (variant === "customer") {
-    y = drawSectionTitle(doc, "Customer", y);
-    y = addParagraph(doc, job.customerName, y);
-
-    y = drawSectionTitle(doc, "Agreed rate (ex VAT)", y);
-    const sell = Number(job.sellPrice) || 0;
-    const fuel = Number(job.fuelSurcharge) || 0;
-    const extra = Number(job.extraCharges) || 0;
-    const total = sell + fuel + extra;
-    doc.setFontSize(10);
-    y = nextPageIfNeeded(doc, y, 28);
-    doc.text(`Transport fee: ${fmtMoney(sell)}`, MARGIN, y);
-    y += LINE_MM;
-    doc.text(`Fuel surcharge: ${fmtMoney(fuel)}`, MARGIN, y);
-    y += LINE_MM;
-    doc.text(`Additional charges: ${fmtMoney(extra)}`, MARGIN, y);
-    y += 7;
-    doc.setFont("helvetica", "bold");
-    doc.setFontSize(12);
-    doc.text(`Total (ex VAT): ${fmtMoney(total)}`, MARGIN, y);
-    doc.setFont("helvetica", "normal");
-    y += 10;
-  } else {
-    y = drawSectionTitle(doc, "Customer (for reference)", y);
-    y = addParagraph(doc, job.customerName, y);
-
-    y = drawSectionTitle(doc, "Supplier / carrier", y);
-    y = addParagraph(doc, `Carrier: ${job.carrier || "—"}`, y);
-    y = addParagraph(doc, `Vehicle / plates: ${job.truckPlates || job.vehicleType || "—"}`, y);
-
-    y = drawSectionTitle(doc, "Agreed supplier rate (ex VAT)", y);
-    doc.setFont("helvetica", "bold");
-    doc.setFontSize(12);
-    y = nextPageIfNeeded(doc, y, 10);
-    doc.text(fmtMoney(Number(job.buyPrice) || 0), MARGIN, y + 2);
-    doc.setFont("helvetica", "normal");
-    y += 10;
-  }
-
-  if (variant === "supplier") {
-    y = drawSectionTitle(doc, "Internal reference", y);
-    doc.setFontSize(9);
-    doc.setTextColor(80);
-    y = addParagraph(
-      doc,
-      `Handler: ${job.handler}  ·  Created: ${fmtDate(job.createdAt.includes("T") ? job.createdAt.slice(0, 10) : job.createdAt)}`,
-      y,
-      9
-    );
-    doc.setTextColor(0);
-  }
-
-  if (job.notes?.trim()) {
-    y = drawSectionTitle(doc, variant === "customer" ? "Notes" : "Operational notes", y);
-    y = addParagraph(doc, job.notes, y);
-  }
-
-  addFooter(doc, variant);
-  return doc;
+  return buildTransportBookingFormPdf(job, issuer, variant === "customer" ? "customer" : "supplier");
 }
 
 export async function downloadCustomerBookingPdf(job: Job, issuer?: BookingPdfIssuer): Promise<void> {
@@ -265,8 +365,12 @@ export async function downloadSupplierBookingPdf(job: Job, issuer?: BookingPdfIs
   doc.save(`Hayleigh-booking-supplier-${job.jobNumber.replace(/[/\\?%*:|"<>]/g, "-")}.pdf`);
 }
 
+export async function downloadCombinedBookingPdf(job: Job, issuer?: BookingPdfIssuer): Promise<void> {
+  const doc = await buildCombinedBookingPdf(job, issuer);
+  doc.save(`Hayleigh-booking-${job.jobNumber.replace(/[/\\?%*:|"<>]/g, "-")}.pdf`);
+}
+
+/** @deprecated Use {@link downloadCombinedBookingPdf} — kept for call sites that expect this name. */
 export async function downloadBothBookingPdfs(job: Job, issuer?: BookingPdfIssuer): Promise<void> {
-  await downloadCustomerBookingPdf(job, issuer);
-  await new Promise((r) => setTimeout(r, 450));
-  await downloadSupplierBookingPdf(job, issuer);
+  await downloadCombinedBookingPdf(job, issuer);
 }

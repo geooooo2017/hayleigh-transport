@@ -12,7 +12,7 @@ import type { ReactNode } from "react";
 import { Link } from "react-router-dom";
 import { ClipboardList, Plus } from "lucide-react";
 import { useLocalStorage } from "../hooks/useLocalStorage";
-import { formatAddressSummary } from "../lib/jobAddress";
+import { formatJobCardDate } from "../lib/jobAddress";
 import { useJobs } from "../context/JobsContext";
 import type { Job } from "../types";
 import { Btn, Card } from "../components/Layout";
@@ -40,13 +40,25 @@ function JobCard({ job, fromBasket }: { job: Job; fromBasket?: boolean }) {
         isDragging ? "opacity-70 ring-2 ring-ht-slate" : ""
       } ${fromBasket ? "border-dashed" : ""}`}
     >
-      <div className="text-sm font-semibold text-gray-900">{job.jobNumber}</div>
-      <div className="text-xs text-gray-600">{job.customerName}</div>
-      <div className="mt-2 line-clamp-2 text-xs text-gray-500">
-        {formatAddressSummary(job, "collection", 56) || "—"}
-      </div>
-      <div className="text-xs text-gray-500">→ {formatAddressSummary(job, "delivery", 56) || "—"}</div>
-      <div className="mt-2 text-xs font-medium text-ht-slate">£{Number(job.sellPrice).toFixed(2)}</div>
+      <div className="text-sm font-semibold text-ht-slate">{job.jobNumber}</div>
+      <dl className="mt-1.5 space-y-0.5 text-[11px] leading-snug text-gray-700">
+        <div className="flex justify-between gap-2">
+          <dt className="shrink-0 text-gray-500">Customer job no.</dt>
+          <dd className="truncate text-right font-medium text-gray-800">{job.customerInvoiceRef?.trim() || "—"}</dd>
+        </div>
+        <div className="flex justify-between gap-2">
+          <dt className="shrink-0 text-gray-500">Collection date</dt>
+          <dd className="text-right">{formatJobCardDate(job.collectionDate)}</dd>
+        </div>
+        <div className="flex justify-between gap-2">
+          <dt className="shrink-0 text-gray-500">Collection postcode</dt>
+          <dd className="truncate text-right font-mono uppercase">{(job.collectionPostcode ?? "").trim() || "—"}</dd>
+        </div>
+        <div className="flex justify-between gap-2">
+          <dt className="shrink-0 text-gray-500">Delivery postcode</dt>
+          <dd className="truncate text-right font-mono uppercase">{(job.deliveryPostcode ?? "").trim() || "—"}</dd>
+        </div>
+      </dl>
     </div>
   );
 }

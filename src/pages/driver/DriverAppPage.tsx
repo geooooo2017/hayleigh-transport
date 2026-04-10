@@ -20,7 +20,6 @@ export default function DriverAppPage() {
   const driverName = session?.driverName ?? "";
   const vehicleReg = session?.vehicleReg ?? "";
   const jobIds = session?.jobIds ?? [];
-  const demoLiveTracking = Boolean(session?.demoLiveTracking);
 
   const { status, lastError, lastUpdated, start, stop } = useDriverLocationSharing(driverName, vehicleReg);
 
@@ -114,15 +113,6 @@ export default function DriverAppPage() {
       </header>
 
       <div className="mx-auto max-w-lg space-y-4 px-4 pt-4 sm:px-5">
-        {demoLiveTracking && (
-          <div
-            className="rounded-xl border-2 border-amber-300 bg-amber-50 px-4 py-3 text-sm text-amber-950 sm:text-xs"
-            role="status"
-          >
-            <strong>Demo mode</strong> — not linked to a job. Share location to test the office Live Tracking map; sign out and
-            turn off demo when finished.
-          </div>
-        )}
         <Card className="overflow-hidden p-0">
           <div className="border-b border-ht-border bg-slate-50 px-4 py-4 sm:py-3">
             <h2 className="flex items-center gap-2 text-base font-semibold text-gray-900 sm:text-sm">
@@ -178,7 +168,7 @@ export default function DriverAppPage() {
         </Card>
 
         <div className="flex items-center justify-between gap-3">
-          <h2 className="text-xl font-semibold text-gray-900 sm:text-lg">{demoLiveTracking ? "Jobs (demo)" : "Your jobs"}</h2>
+          <h2 className="text-xl font-semibold text-gray-900 sm:text-lg">Your jobs</h2>
           <button
             type="button"
             onClick={() => void loadJobs()}
@@ -194,14 +184,7 @@ export default function DriverAppPage() {
           <p className="text-center text-sm text-gray-500">Loading…</p>
         ) : jobs.length === 0 ? (
           <Card className="rounded-2xl p-6 text-center text-base text-gray-600 sm:text-sm">
-            {demoLiveTracking ? (
-              <>
-                No job loaded — that&apos;s expected in demo mode. Use <strong>Share my location</strong> above; the office map
-                will show your green dot when Supabase is configured.
-              </>
-            ) : (
-              "No jobs found. Ask the office to check assignment."
-            )}
+            No jobs found. Ask the office to check assignment.
           </Card>
         ) : (
           <ul className="space-y-3">

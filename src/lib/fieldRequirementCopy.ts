@@ -7,7 +7,7 @@ export const JOB_CARRIER_WHY =
   "Carrier and vehicle registration tie the job to who is actually hauling the load, match the driver app login, and appear on compliance paperwork and your jobs spreadsheet.";
 
 export const JOB_ADDRESS_WHY =
-  "Full addresses, contacts, and postcodes are mandatory so POD emails reach the right person, the map and ETA alerts work, and HMRC / customer queries can be answered from one record.";
+  "Full addresses, site phone numbers, and postcodes are required for drivers, maps, and ETA alerts. Collection and delivery contact names and emails are optional but help when you need to email the site directly.";
 
 export const JOB_MAP_WHY =
   "Postcodes anchor map pins, distance checks, and UK geocoding. Domestic jobs need full valid UK codes; international legs still need a code (any format, min. 2 characters) so coordinates can be stored consistently.";
@@ -41,7 +41,7 @@ export const DRIVER_LOGIN_WHY =
 export const DRIVER_REQ = {
   name: "Must match the spelling on your assigned job so the gate shows only your work.",
   vehicle: "Must match truck plates saved on the job for verification and live map labels.",
-  jobNumbers: "Office job numbers prove which runs you are on — required unless using demo live map.",
+  jobNumbers: "Office job numbers prove which runs you are on.",
 } as const;
 
 export const SETTINGS_COMPANY_WHY =
@@ -85,10 +85,10 @@ export const REQ = {
   buyPrice: "Buy (ex VAT) records supplier cost for GP; enter 0 only if not yet agreed.",
   routeType: "Domestic vs international affects VAT treatment and job numbering.",
   collectionAddress: "Collection site where goods are loaded — required for drivers and POD.",
-  collectionContact: "Site contact for collection — needed if the driver or office must call ahead.",
+  collectionContact: "Site phone is required for the driver. Contact name and email are optional.",
   collectionPostcode: "Postcode pins the map and validates UK legs for live tracking.",
   deliveryAddress: "Delivery site — required so the customer receives goods at the right place.",
-  deliveryContact: "Delivery site contact for unload and POD.",
+  deliveryContact: "Site phone is required for unload coordination. Contact name and email are optional.",
   deliveryPostcode: "Postcode for map, ETAs, and address verification.",
   customerEmail: "Optional for POD mailto; add when you email POD or invoices from the job.",
   assignedDriver: "Optional until you know who is driving; must match /driver sign-in when set.",

@@ -4,8 +4,6 @@ export type DriverSession = {
   driverName: string;
   vehicleReg: string;
   jobIds: number[];
-  /** Set when driver uses “demo” sign-in (no job). Remove when demo mode is retired. */
-  demoLiveTracking?: boolean;
 };
 
 export function readDriverSession(): DriverSession | null {
@@ -14,7 +12,7 @@ export function readDriverSession(): DriverSession | null {
     if (!raw) return null;
     const o = JSON.parse(raw) as DriverSession;
     if (!o.driverName || !o.vehicleReg || !Array.isArray(o.jobIds)) return null;
-    if (o.jobIds.length === 0 && !o.demoLiveTracking) return null;
+    if (o.jobIds.length === 0) return null;
     return o;
   } catch {
     return null;

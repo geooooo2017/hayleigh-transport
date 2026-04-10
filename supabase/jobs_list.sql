@@ -4,6 +4,7 @@
 create table if not exists public.jobs_list (
   id smallint primary key default 1,
   jobs jsonb not null default '[]'::jsonb,
+  deleted_jobs jsonb not null default '[]'::jsonb,
   updated_at timestamptz not null default now(),
   constraint jobs_list_singleton check (id = 1)
 );

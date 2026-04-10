@@ -16,15 +16,14 @@ import {
   Trash2,
   Truck,
 } from "lucide-react";
-import { useEffect, useMemo, useRef, useState } from "react";
-import { BibbyJobCosting } from "../components/BibbyJobCosting";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { JobLifecycleTimeline } from "../components/JobLifecycleTimeline";
 import { useAuth } from "../context/AuthContext";
-import { useJobs } from "../context/JobsContext";
+import { useJobRecycleBin, useJobs } from "../context/JobsContext";
 import { delay, geocodeNominatim, geocodeUkPostcode } from "../lib/geocode";
 import { isValidUkPostcodeFormat, ukPostcodeValidationMessage } from "../lib/ukPostcode";
 import { userCanDeleteJobs } from "../lib/permissions";
-import { downloadCustomerBookingPdf, downloadSupplierBookingPdf } from "../lib/jobBookingPdf";
+import { downloadCombinedBookingPdf } from "../lib/jobBookingPdf";
 import {
   buildPodMailtoUrl,
   dataUrlToFile,
@@ -44,7 +43,6 @@ import {
   getCollectionAddressIssues,
   getDeliveryAddressIssues,
   getJobAddressIssues,
-  isRequiredEmailOk,
 } from "../lib/jobAddressValidation";
 import {
   JOB_ADDRESS_WHY,
@@ -58,14 +56,17 @@ import {
   POD_ATTACHMENT_WHY,
   REQ,
 } from "../lib/fieldRequirementCopy";
-import { computeBibbyBreakdown, resolveBibbyInvoiceValue } from "../lib/bibbyFinancing";
 import { getUserCompanyDetails } from "../lib/userCompanyProfile";
-import { getUserBibbyTerms } from "../lib/userBibbySettings";
 import type { Job } from "../types";
 import { notifyError, notifyMessage, notifySuccess } from "../lib/platformNotify";
 import { MissingFieldLegend, ReqStar, WhyThisSection } from "../components/FormGuidance";
 import { Btn, Card } from "../components/Layout";
 import { platformPath } from "../routes/paths";
+import { joinStructuredAddressLines, splitSavedAddressLines } from "../lib/addressStructured";
+import type { PlaceResolvedPayload } from "../lib/googlePlaceToAddress";
+import { StructuredSiteAddressFields } from "../components/StructuredSiteAddressFields";
+
+const GOOGLE_MAPS_KEY = import.meta.env.VITE_GOOGLE_MAPS_API_KEY as string | undefined;
 
 function statusBadge(status: Job["status"]) {
   const map = {
@@ -85,6 +86,7 @@ export default function JobDetailPage() {
   const navigate = useNavigate();
   const { user } = useAuth();
   const [jobs, setJobs] = useJobs();
+  const { softDeleteJob } = useJobRecycleBin();
   const id = Number(jobId);
   const job = jobs.find((j) => j.id === id);
   const [assignedDriverName, setAssignedDriverName] = useState("");
@@ -102,17 +104,21 @@ export default function JobDetailPage() {
   const [finSell, setFinSell] = useState("");
   const [finFuel, setFinFuel] = useState("");
   const [finExtra, setFinExtra] = useState("");
-  const [bibbyInvoiceStr, setBibbyInvoiceStr] = useState("");
-  const [bibbyDaysStr, setBibbyDaysStr] = useState("");
   const [notesText, setNotesText] = useState("");
   const [collectionPostcode, setCollectionPostcode] = useState("");
   const [deliveryPostcode, setDeliveryPostcode] = useState("");
   const [geoBusy, setGeoBusy] = useState(false);
-  const [cAddrLines, setCAddrLines] = useState("");
+  const [cOrg, setCOrg] = useState("");
+  const [cLine1, setCLine1] = useState("");
+  const [cLine2, setCLine2] = useState("");
+  const [cTown, setCTown] = useState("");
   const [cContactName, setCContactName] = useState("");
   const [cContactPhone, setCContactPhone] = useState("");
   const [cContactEmail, setCContactEmail] = useState("");
-  const [dAddrLines, setDAddrLines] = useState("");
+  const [dOrg, setDOrg] = useState("");
+  const [dLine1, setDLine1] = useState("");
+  const [dLine2, setDLine2] = useState("");
+  const [dTown, setDTown] = useState("");
   const [dContactName, setDContactName] = useState("");
   const [dContactPhone, setDContactPhone] = useState("");
   const [dContactEmail, setDContactEmail] = useState("");
@@ -131,6 +137,31 @@ export default function JobDetailPage() {
   const podInputRef = useRef<HTMLInputElement>(null);
   const oversizedPodRef = useRef<File | null>(null);
   const canDeleteJob = userCanDeleteJobs(user);
+
+  const cAddrLines = useMemo(
+    () => joinStructuredAddressLines({ organisation: cOrg, line1: cLine1, line2: cLine2, town: cTown }),
+    [cOrg, cLine1, cLine2, cTown]
+  );
+  const dAddrLines = useMemo(
+    () => joinStructuredAddressLines({ organisation: dOrg, line1: dLine1, line2: dLine2, town: dTown }),
+    [dOrg, dLine1, dLine2, dTown]
+  );
+
+  const onCollectionPlace = useCallback((p: PlaceResolvedPayload) => {
+    setCOrg(p.organisation);
+    setCLine1(p.line1);
+    setCLine2(p.line2);
+    setCTown(p.town);
+    if (p.postcode.trim()) setCollectionPostcode(p.postcode.trim().toUpperCase());
+  }, []);
+
+  const onDeliveryPlace = useCallback((p: PlaceResolvedPayload) => {
+    setDOrg(p.organisation);
+    setDLine1(p.line1);
+    setDLine2(p.line2);
+    setDTown(p.town);
+    if (p.postcode.trim()) setDeliveryPostcode(p.postcode.trim().toUpperCase());
+  }, []);
 
   const validatePostcodesOrToast = () => {
     const c = collectionPostcode.trim();
@@ -184,8 +215,6 @@ export default function JobDetailPage() {
     setFinSell(String(job.sellPrice ?? ""));
     setFinFuel(String(job.fuelSurcharge ?? ""));
     setFinExtra(String(job.extraCharges ?? ""));
-    setBibbyInvoiceStr(job.bibbyInvoiceValueExVat != null ? String(job.bibbyInvoiceValueExVat) : "");
-    setBibbyDaysStr(job.bibbyDaysOutstanding != null ? String(job.bibbyDaysOutstanding) : "");
     setNotesText(job.notes ?? "");
     setSheetBillable(job.billable === "yes" ? "yes" : "no");
     setSheetPodSent(job.podSent === "yes" ? "yes" : "no");
@@ -198,11 +227,19 @@ export default function JobDetailPage() {
     setSheetPodReceived(job.podReceived === "yes" ? "yes" : "no");
     setSheetSupplierInvRec(job.supplierInvoiceReceived === "yes" ? "yes" : "no");
     setSheetSupplierDue(job.supplierDueDate && job.supplierDueDate.length >= 10 ? job.supplierDueDate.slice(0, 10) : job.supplierDueDate ?? "");
-    setCAddrLines(job.collectionAddressLines);
+    const cp = splitSavedAddressLines(job.collectionAddressLines);
+    const dp = splitSavedAddressLines(job.deliveryAddressLines);
+    setCOrg(cp.organisation);
+    setCLine1(cp.line1);
+    setCLine2(cp.line2);
+    setCTown(cp.town);
     setCContactName(job.collectionContactName);
     setCContactPhone(job.collectionContactPhone);
     setCContactEmail(job.collectionContactEmail);
-    setDAddrLines(job.deliveryAddressLines);
+    setDOrg(dp.organisation);
+    setDLine1(dp.line1);
+    setDLine2(dp.line2);
+    setDTown(dp.town);
     setDContactName(job.deliveryContactName);
     setDContactPhone(job.deliveryContactPhone);
     setDContactEmail(job.deliveryContactEmail);
@@ -224,44 +261,6 @@ export default function JobDetailPage() {
     const margin = sell > 0 ? (profit / sell) * 100 : 0;
     return { profit, margin };
   }, [finBuy, finSell, finFuel, finExtra]);
-
-  const bibbyTerms = useMemo(() => getUserBibbyTerms(user?.id), [user?.id]);
-
-  const bibbyDraftJob = useMemo((): Pick<
-    Job,
-    "sellPrice" | "buyPrice" | "fuelSurcharge" | "extraCharges" | "bibbyInvoiceValueExVat" | "bibbyDaysOutstanding"
-  > => {
-    const buy = parseFloat(finBuy) || 0;
-    const sell = parseFloat(finSell) || 0;
-    const fuel = parseFloat(finFuel) || 0;
-    const extra = parseFloat(finExtra) || 0;
-    const invParsed = bibbyInvoiceStr.trim() === "" ? NaN : parseFloat(bibbyInvoiceStr);
-    const invOverride = Number.isFinite(invParsed) && invParsed > 0 ? invParsed : undefined;
-    const daysParsed = bibbyDaysStr.trim() === "" ? undefined : Math.max(0, Math.floor(Number(bibbyDaysStr) || 0));
-    return {
-      sellPrice: sell,
-      buyPrice: buy,
-      fuelSurcharge: fuel,
-      extraCharges: extra,
-      bibbyInvoiceValueExVat: invOverride,
-      bibbyDaysOutstanding: daysParsed,
-    };
-  }, [finBuy, finSell, finFuel, finExtra, bibbyInvoiceStr, bibbyDaysStr]);
-
-  const bibbyBreakdown = useMemo(
-    () => computeBibbyBreakdown(bibbyDraftJob, bibbyTerms),
-    [bibbyDraftJob, bibbyTerms]
-  );
-
-  const bibbyNetTurnover = useMemo(() => {
-    const sell = parseFloat(finSell) || 0;
-    const fuel = parseFloat(finFuel) || 0;
-    const extra = parseFloat(finExtra) || 0;
-    return sell + fuel + extra;
-  }, [finSell, finFuel, finExtra]);
-
-  const bibbyInvoiceMiss = resolveBibbyInvoiceValue(bibbyDraftJob) <= 0;
-  const bibbyDaysMiss = bibbyDaysStr.trim() === "";
 
   const addressFormIssues = useMemo(
     () =>
@@ -309,18 +308,16 @@ export default function JobDetailPage() {
       carrier: !coreCarrier.trim(),
       truck: !coreTruckPlates.trim(),
       cAddr: !cAddrLines.trim(),
-      cName: !cContactName.trim(),
       cPhone: !cContactPhone.trim(),
-      cEmail: !isRequiredEmailOk(cContactEmail),
+      cEmail: cContactEmail.trim() !== "" && !looksLikeEmail(cContactEmail),
       cPc: pcBad(cPc),
       dAddr: !dAddrLines.trim(),
-      dName: !dContactName.trim(),
       dPhone: !dContactPhone.trim(),
-      dEmail: !isRequiredEmailOk(dContactEmail),
+      dEmail: dContactEmail.trim() !== "" && !looksLikeEmail(dContactEmail),
       dPc: pcBad(dPc),
       finBuy: finBuy.trim() === "",
       finSell: !(parseFloat(finSell) > 0),
-      podCustEmail: !looksLikeEmail(customerEmail),
+      podCustEmail: customerEmail.trim() !== "" && !looksLikeEmail(customerEmail),
     };
   }, [
     coreCustomerName,
@@ -330,12 +327,10 @@ export default function JobDetailPage() {
     coreCarrier,
     coreTruckPlates,
     cAddrLines,
-    cContactName,
     cContactPhone,
     cContactEmail,
     collectionPostcode,
     dAddrLines,
-    dContactName,
     dContactPhone,
     dContactEmail,
     deliveryPostcode,
@@ -570,7 +565,7 @@ export default function JobDetailPage() {
             className="gap-2"
             type="button"
             onClick={() =>
-              downloadCustomerBookingPdf(job, {
+              downloadCombinedBookingPdf(job, {
                 details: getUserCompanyDetails(user?.id),
                 preparedBy: user?.name,
               }).catch(() =>
@@ -578,22 +573,7 @@ export default function JobDetailPage() {
               )
             }
           >
-            <FileDown size={16} /> Customer PDF
-          </Btn>
-          <Btn
-            variant="outline"
-            className="gap-2"
-            type="button"
-            onClick={() =>
-              downloadSupplierBookingPdf(job, {
-                details: getUserCompanyDetails(user?.id),
-                preparedBy: user?.name,
-              }).catch(() =>
-                notifyError("Could not build PDF", { description: "Try again or check that the logo loads." })
-              )
-            }
-          >
-            <FileDown size={16} /> Supplier PDF
+            <FileDown size={16} /> Booking PDF (customer &amp; supplier)
           </Btn>
           <Btn
             className="gap-2"
@@ -618,10 +598,10 @@ export default function JobDetailPage() {
         <Card className="flex gap-3 border-2 border-amber-200 bg-amber-50 p-4">
           <AlertTriangle className="mt-0.5 h-5 w-5 shrink-0 text-amber-700" aria-hidden />
           <div className="min-w-0">
-            <h2 className="text-sm font-semibold text-amber-950">Complete mandatory address details</h2>
+            <h2 className="text-sm font-semibold text-amber-950">Complete required address details</h2>
             <p className="mt-1 text-sm text-amber-950/90">
-              This job is missing information required for maps, paperwork, and compliance. Fill every field under{" "}
-              <strong>Collection &amp; delivery</strong> and <strong>Map — postcodes</strong> below.
+              This job is missing required address, phone, or postcode information. Site contact names and emails are optional.
+              Update <strong>Collection &amp; delivery</strong> and <strong>Map — postcodes</strong> below.
             </p>
             <ul className="mt-2 list-inside list-disc text-sm text-amber-950/85">
               {addressFormIssues.slice(0, 8).map((line) => (
@@ -869,34 +849,37 @@ export default function JobDetailPage() {
           </h2>
           <WhyThisSection>{JOB_ADDRESS_WHY}</WhyThisSection>
           <p className="mb-4 text-sm text-gray-600">
-            Save each side only when that side (and its postcode in the map section below) is complete — incomplete jobs
-            appear in the notifications bell.
+            Save each side when that side (and its postcode in the map section below) has the required fields. Contact names and
+            emails are optional. Incomplete required fields still appear in the notifications bell.
           </p>
           <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
             <div className="space-y-3 rounded-lg border border-emerald-200/80 bg-emerald-50/30 p-4">
-              <h3 className="text-sm font-semibold text-emerald-900">Collection</h3>
-              <div>
-                <label className="mb-1 block text-xs font-medium text-gray-600">
-                  Address
-                  <ReqStar show={jobDetailMiss.cAddr} why={REQ.collectionAddress} />
-                </label>
-                <textarea
-                  value={cAddrLines}
-                  onChange={(e) => setCAddrLines(e.target.value)}
-                  rows={3}
-                  required
-                  className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm"
-                />
-              </div>
+              <StructuredSiteAddressFields
+                title="Collection"
+                titleClassName="text-sm font-semibold text-emerald-900"
+                wrapperClassName="space-y-3"
+                routeType={coreRouteType}
+                googleMapsApiKey={GOOGLE_MAPS_KEY}
+                organisation={cOrg}
+                line1={cLine1}
+                line2={cLine2}
+                town={cTown}
+                onOrganisationChange={setCOrg}
+                onLine1Change={setCLine1}
+                onLine2Change={setCLine2}
+                onTownChange={setCTown}
+                onPlaceResolved={onCollectionPlace}
+                showAddressRequiredStar={jobDetailMiss.cAddr}
+                addressRequiredWhy={REQ.collectionAddress}
+              />
               <div>
                 <label className="mb-1 block text-xs font-medium text-gray-600">
                   Contact name
-                  <ReqStar show={jobDetailMiss.cName} why={REQ.collectionContact} />
+                  <span className="ml-1 font-normal text-gray-500">(optional)</span>
                 </label>
                 <input
                   value={cContactName}
                   onChange={(e) => setCContactName(e.target.value)}
-                  required
                   className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm"
                 />
               </div>
@@ -916,13 +899,13 @@ export default function JobDetailPage() {
               <div>
                 <label className="mb-1 block text-xs font-medium text-gray-600">
                   Contact email
+                  <span className="ml-1 font-normal text-gray-500">(optional)</span>
                   <ReqStar show={jobDetailMiss.cEmail} why={REQ.collectionContact} />
                 </label>
                 <input
                   type="email"
                   value={cContactEmail}
                   onChange={(e) => setCContactEmail(e.target.value)}
-                  required
                   className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm"
                 />
               </div>
@@ -931,29 +914,32 @@ export default function JobDetailPage() {
               </Btn>
             </div>
             <div className="space-y-3 rounded-lg border border-red-200/80 bg-red-50/20 p-4">
-              <h3 className="text-sm font-semibold text-red-900">Delivery</h3>
-              <div>
-                <label className="mb-1 block text-xs font-medium text-gray-600">
-                  Address
-                  <ReqStar show={jobDetailMiss.dAddr} why={REQ.deliveryAddress} />
-                </label>
-                <textarea
-                  value={dAddrLines}
-                  onChange={(e) => setDAddrLines(e.target.value)}
-                  rows={3}
-                  required
-                  className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm"
-                />
-              </div>
+              <StructuredSiteAddressFields
+                title="Delivery"
+                titleClassName="text-sm font-semibold text-red-900"
+                wrapperClassName="space-y-3"
+                routeType={coreRouteType}
+                googleMapsApiKey={GOOGLE_MAPS_KEY}
+                organisation={dOrg}
+                line1={dLine1}
+                line2={dLine2}
+                town={dTown}
+                onOrganisationChange={setDOrg}
+                onLine1Change={setDLine1}
+                onLine2Change={setDLine2}
+                onTownChange={setDTown}
+                onPlaceResolved={onDeliveryPlace}
+                showAddressRequiredStar={jobDetailMiss.dAddr}
+                addressRequiredWhy={REQ.deliveryAddress}
+              />
               <div>
                 <label className="mb-1 block text-xs font-medium text-gray-600">
                   Contact name
-                  <ReqStar show={jobDetailMiss.dName} why={REQ.deliveryContact} />
+                  <span className="ml-1 font-normal text-gray-500">(optional)</span>
                 </label>
                 <input
                   value={dContactName}
                   onChange={(e) => setDContactName(e.target.value)}
-                  required
                   className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm"
                 />
               </div>
@@ -973,13 +959,13 @@ export default function JobDetailPage() {
               <div>
                 <label className="mb-1 block text-xs font-medium text-gray-600">
                   Contact email
+                  <span className="ml-1 font-normal text-gray-500">(optional)</span>
                   <ReqStar show={jobDetailMiss.dEmail} why={REQ.deliveryContact} />
                 </label>
                 <input
                   type="email"
                   value={dContactEmail}
                   onChange={(e) => setDContactEmail(e.target.value)}
-                  required
                   className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm"
                 />
               </div>
@@ -1244,11 +1230,6 @@ export default function JobDetailPage() {
                 const extra = parseFloat(finExtra) || 0;
                 const profit = sell - buy - fuel - extra;
                 const margin = sell > 0 ? (profit / sell) * 100 : 0;
-                const invParsed = bibbyInvoiceStr.trim() === "" ? NaN : parseFloat(bibbyInvoiceStr);
-                const bibbyInvoiceValueExVat =
-                  Number.isFinite(invParsed) && invParsed > 0 ? invParsed : undefined;
-                const bibbyDaysOutstanding =
-                  bibbyDaysStr.trim() === "" ? undefined : Math.max(0, Math.floor(Number(bibbyDaysStr) || 0));
                 patchJob({
                   buyPrice: buy,
                   sellPrice: sell,
@@ -1256,8 +1237,6 @@ export default function JobDetailPage() {
                   extraCharges: extra,
                   profit,
                   margin,
-                  bibbyInvoiceValueExVat,
-                  bibbyDaysOutstanding,
                 });
                 notifySuccess("Pricing saved", {
                   description: `Profit £${profit.toFixed(2)} · margin ${margin.toFixed(1)}%`,
@@ -1273,17 +1252,6 @@ export default function JobDetailPage() {
               <span className="ml-2 text-xs">(saved to job when you click Save pricing)</span>
             </div>
           </div>
-          <BibbyJobCosting
-            terms={bibbyTerms}
-            breakdown={bibbyBreakdown}
-            invoiceValueInput={bibbyInvoiceStr}
-            daysOutstandingInput={bibbyDaysStr}
-            onInvoiceChange={setBibbyInvoiceStr}
-            onDaysChange={setBibbyDaysStr}
-            invoiceMiss={bibbyInvoiceMiss}
-            daysMiss={bibbyDaysMiss}
-            netTurnoverHint={bibbyNetTurnover}
-          />
         </Card>
 
         <Card className="p-6 md:col-span-2">
@@ -1510,25 +1478,29 @@ export default function JobDetailPage() {
         {canDeleteJob && (
           <Card className="border-red-200 bg-red-50/50 p-6 lg:col-span-2">
             <h2 className="mb-2 flex items-center gap-2 text-lg font-semibold text-red-900">
-              <Trash2 size={20} aria-hidden /> Delete this job
+              <Trash2 size={20} aria-hidden /> Move job to deleted bin
             </h2>
             <p className="mb-4 text-sm text-red-950/90">
-              <strong>Warning:</strong> Only Nik may remove jobs from the system. Deleting permanently removes this job for
-              everyone (including cloud sync) and cannot be undone. Confirm with the office before proceeding.
+              The job is removed from the live jobs list and kept in a <strong>deleted bin for 90 days</strong> (Settings →
+              Deleted jobs). You can restore it during that time. After 90 days it is removed automatically. This applies to
+              the whole team when cloud sync is on.
             </p>
             <Btn
               type="button"
               variant="outline"
               className="border-red-300 bg-white text-red-800 hover:bg-red-50"
               onClick={() => {
-                const msg = `Permanently delete job ${job.jobNumber}? This cannot be undone.`;
+                const msg = `Move job ${job.jobNumber} to the deleted bin? It will disappear from jobs and the board until restored (90 days max).`;
                 if (!window.confirm(msg)) return;
-                setJobs((prev) => prev.filter((j) => j.id !== id));
-                notifySuccess("Job deleted", { href: platformPath("/jobs") });
+                softDeleteJob(job, user?.name);
+                notifySuccess("Job moved to deleted bin", {
+                  description: "Restore under Settings → Deleted jobs.",
+                  href: platformPath("/settings"),
+                });
                 navigate(platformPath("/jobs"));
               }}
             >
-              <Trash2 size={16} aria-hidden /> Delete job permanently
+              <Trash2 size={16} aria-hidden /> Move to deleted bin
             </Btn>
           </Card>
         )}
@@ -1547,6 +1519,7 @@ export default function JobDetailPage() {
         <div className="mb-4 max-w-md space-y-2">
           <label className="block text-sm font-medium text-gray-700">
             Customer email
+            <span className="ml-1 text-xs font-normal text-gray-500">(optional — required to open POD email draft)</span>
             <ReqStar show={jobDetailMiss.podCustEmail} why={REQ.customerEmail} />
           </label>
           <div className="flex flex-wrap gap-2">
