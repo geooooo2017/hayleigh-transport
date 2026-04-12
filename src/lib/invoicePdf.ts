@@ -112,18 +112,6 @@ function textRight(doc: jsPDF, text: string, y: number, xRight = PAGE_W - MARGIN
   doc.text(text, xRight - w, y);
 }
 
-function addInvoiceFooter(doc: jsPDF, y: number): number {
-  y = nextPageIfNeeded(doc, y, 24);
-  doc.setFontSize(8);
-  doc.setTextColor(100);
-  const msg =
-    "Amounts in the lines above are excluding VAT. VAT is calculated at the standard UK rate (20%) on the net total unless your agreement states otherwise. This invoice is a draft from your transport system — adjust wording or rates if your terms differ.";
-  const lines = doc.splitTextToSize(msg, MAX_TEXT_W);
-  doc.text(lines, MARGIN, y);
-  doc.setTextColor(0);
-  return y + lines.length * 3.6 + 4;
-}
-
 /**
  * Customer sales invoice: letterhead (logo + company + user contact from Settings), bill-to, line items ex VAT, then VAT and gross.
  */
@@ -240,7 +228,7 @@ export async function buildJobInvoicePdf(job: Job, issuer?: BookingPdfIssuer): P
   doc.text("Total due (including VAT)", COL_DESC, y);
   textRight(doc, fmtMoney(grossTotal), y, COL_NET + 32);
   doc.setFontSize(10);
-  y += 10;
+  y += 6;
 
   doc.setFont("helvetica", "normal");
   doc.setFontSize(9);
@@ -248,7 +236,6 @@ export async function buildJobInvoicePdf(job: Job, issuer?: BookingPdfIssuer): P
   y = addParagraphSmall(doc, `Service period: collection ${fmtDate(job.collectionDate)} — delivery ${fmtDate(job.deliveryDate)}`, y);
   doc.setTextColor(0);
 
-  y = addInvoiceFooter(doc, y);
   return doc;
 }
 

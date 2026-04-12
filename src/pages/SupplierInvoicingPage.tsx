@@ -206,7 +206,7 @@ export default function SupplierInvoicingPage() {
               <th className="px-3 py-3 text-left font-medium text-gray-600">Customer</th>
               <th className="px-3 py-3 text-left font-medium text-gray-600">Status</th>
               <th className="px-3 py-3 text-right font-medium text-gray-600">Customer net (ex VAT)</th>
-              <th className="px-3 py-3 text-right font-medium text-gray-600">Supplier cost</th>
+              <th className="px-3 py-3 text-right font-medium text-gray-600">Supplier cost (ex VAT)</th>
               <th className="px-3 py-3 text-right font-medium text-gray-600">GP</th>
               <th className="px-3 py-3 text-center font-medium text-gray-600">Lines</th>
               <th className="px-3 py-3 text-center font-medium text-gray-600">PDFs</th>
