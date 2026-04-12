@@ -10,10 +10,12 @@
   --color-ht-border: #d4d9e0;
   --color-ht-amber: #d97706;
   --color-ht-amber-dark: #b45309;
+  --color-ht-body-text: #0f172a;
 }
 
 /* Leaflet custom driver markers */
-.fleet-driver-pin {
+.fleet-driver-pin,
+.fleet-vehicle-marker {
   background: transparent !important;
   border: none !important;
 }
@@ -24,5 +26,5 @@ body {
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
   background-color: var(--color-ht-canvas);
-  color: #0f172a;
+  color: var(--color-ht-body-text);
 }

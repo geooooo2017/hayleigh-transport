@@ -1,3 +1,5 @@
+import { formatVehicleRegistrationDisplay } from "./driverPositionsApi";
+
 export const DRIVER_SESSION_KEY = "ht_driver_session";
 
 export type DriverSession = {
@@ -16,7 +18,7 @@ export function readDriverSession(): DriverSession | null {
     const jobIds = o.jobIds.filter((id) => typeof id === "number" && Number.isFinite(id));
     if (jobIds.length === 0) return null;
     return {
-      vehicleReg: String(o.vehicleReg).trim(),
+      vehicleReg: formatVehicleRegistrationDisplay(String(o.vehicleReg)),
       jobIds,
       ...(typeof o.driverName === "string" && o.driverName.trim() ? { driverName: o.driverName.trim() } : {}),
     };
@@ -26,7 +28,13 @@ export function readDriverSession(): DriverSession | null {
 }
 
 export function writeDriverSession(s: DriverSession) {
-  sessionStorage.setItem(DRIVER_SESSION_KEY, JSON.stringify(s));
+  sessionStorage.setItem(
+    DRIVER_SESSION_KEY,
+    JSON.stringify({
+      ...s,
+      vehicleReg: formatVehicleRegistrationDisplay(s.vehicleReg),
+    })
+  );
 }
 
 export function clearDriverSession() {

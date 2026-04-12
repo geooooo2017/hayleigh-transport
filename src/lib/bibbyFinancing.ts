@@ -1,5 +1,6 @@
 import type { Job } from "../types";
-import { jobNetExVat } from "./jobNetAmount";
+import { resolveInvoiceValueExVat } from "./jobNetAmount";
+import { computeJobGpExVat } from "./jobProfit";
 
 /** Editable agreement terms (Bibby-style invoice financing). Percentages are e.g. 85 for 85%. */
 export type BibbyTerms = {
@@ -53,24 +54,29 @@ function round2(n: number): number {
 
 /** Invoice value on the facility: explicit job override, else net customer turnover (sell + fuel + extras, ex VAT). */
 export function resolveBibbyInvoiceValue(job: Pick<Job, "bibbyInvoiceValueExVat" | "sellPrice" | "fuelSurcharge" | "extraCharges">): number {
-  const v = job.bibbyInvoiceValueExVat;
-  if (v != null && Number.isFinite(v) && v > 0) return v;
-  return jobNetExVat(job as Job);
+  return resolveInvoiceValueExVat(job);
 }
 
-export function computeOperatingProfit(job: Pick<Job, "sellPrice" | "buyPrice" | "fuelSurcharge" | "extraCharges">): number {
-  const sell = Number(job.sellPrice) || 0;
-  const buy = Number(job.buyPrice) || 0;
-  const fuel = Number(job.fuelSurcharge) || 0;
-  const extra = Number(job.extraCharges) || 0;
-  return sell - buy - fuel - extra;
+export function computeOperatingProfit(
+  job: Pick<Job, "sellPrice" | "buyPrice" | "fuelSurcharge" | "extraCharges" | "bibbyInvoiceValueExVat" | "supplierInvoiceLines">,
+): number {
+  return computeJobGpExVat(job).profit;
 }
 
 /**
  * Full Bibby-style cost stack. If `daysOutstanding` is undefined, discount fee for the period is 0 (caller should prompt for days).
  */
 export function computeBibbyBreakdown(
-  job: Pick<Job, "sellPrice" | "buyPrice" | "fuelSurcharge" | "extraCharges" | "bibbyInvoiceValueExVat" | "bibbyDaysOutstanding">,
+  job: Pick<
+    Job,
+    | "sellPrice"
+    | "buyPrice"
+    | "fuelSurcharge"
+    | "extraCharges"
+    | "bibbyInvoiceValueExVat"
+    | "bibbyDaysOutstanding"
+    | "supplierInvoiceLines"
+  >,
   terms: BibbyTerms
 ): BibbyBreakdown | null {
   const invoiceValue = resolveBibbyInvoiceValue(job);

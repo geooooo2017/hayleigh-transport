@@ -1,15 +1,16 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { LogOut, MapPin, Navigation, RefreshCw, Truck } from "lucide-react";
 import { toast } from "sonner";
 import { Btn, Card } from "../../components/Layout";
+import { DriverJobCardContent } from "../../components/driver/DriverJobCard";
 import { useDriverLocationSharing } from "../../hooks/useDriverLocationSharing";
+import { appendDriverPortalActivity } from "../../lib/appendDriverPortalActivity";
 import { getSupabase } from "../../lib/supabase";
 import { detectOfficeJobUpdates, primeDriverSeenRevisions } from "../../lib/driverRevisionStorage";
-import { formatAddressBlock } from "../../lib/jobAddress";
 import { fetchJobsSnapshot } from "../../lib/jobsSnapshot";
 import { clearDriverSession, readDriverSession } from "../../lib/driverSession";
-import type { Job } from "../../types";
+import type { DriverPortalActivityKind, Job } from "../../types";
 
 export default function DriverAppPage() {
   const navigate = useNavigate();
@@ -22,26 +23,56 @@ export default function DriverAppPage() {
   const jobIds = session?.jobIds ?? [];
   const headerTitle = driverName.trim() ? driverName : vehicleReg;
 
+  const logActivity = useCallback(
+    (kind: DriverPortalActivityKind, detail?: string) => {
+      if (jobIds.length === 0) return;
+      void appendDriverPortalActivity({
+        targetJobIds: jobIds,
+        allowedJobIds: jobIds,
+        vehicleReg,
+        ...(driverName.trim() ? { driverName: driverName.trim() } : {}),
+        kind,
+        ...(detail?.trim() ? { detail: detail.trim() } : {}),
+      });
+    },
+    [jobIds, vehicleReg, driverName]
+  );
+
+  const logFirstGps = useCallback(() => {
+    logActivity("location_first_gps_sent");
+  }, [logActivity]);
+
   const { status, lastError, lastUpdated, start, stop } = useDriverLocationSharing(
     driverName,
     vehicleReg,
-    jobIds
+    jobIds,
+    { onFirstGpsSuccess: logFirstGps }
   );
 
-  const loadJobs = useCallback(async () => {
-    const all = await fetchJobsSnapshot();
-    const filtered = all.filter((j) => jobIds.includes(j.id));
-    primeDriverSeenRevisions(filtered);
-    const updated = detectOfficeJobUpdates(filtered);
-    if (updated.length > 0) {
-      toast.warning(updated.length === 1 ? `Job ${updated[0]} updated by office` : `${updated.length} jobs updated by office`, {
-        description: "Pull to refresh or wait — check collection & delivery details.",
-        duration: 14_000,
-      });
-    }
-    setJobs(filtered);
-    setLoading(false);
-  }, [jobIds]);
+  const signedInLoggedRef = useRef(false);
+  const prevStatusRef = useRef<typeof status>("idle");
+
+  const loadJobs = useCallback(
+    async (opts?: { manual?: boolean }) => {
+      const all = await fetchJobsSnapshot();
+      const filtered = all.filter((j) => jobIds.includes(j.id));
+      primeDriverSeenRevisions(filtered);
+      const updated = detectOfficeJobUpdates(filtered);
+      if (updated.length > 0) {
+        toast.warning(updated.length === 1 ? `Job ${updated[0]} updated by office` : `${updated.length} jobs updated by office`, {
+          description: "Pull to refresh or wait — check collection & delivery details.",
+          duration: 14_000,
+        });
+        logActivity("office_update_notice_shown", `Job number(s): ${updated.join(", ")}`);
+      }
+      setJobs(filtered);
+      setLoading(false);
+      if (opts?.manual) {
+        logActivity("refresh_jobs_manual");
+      }
+    },
+    [jobIds, logActivity]
+  );
 
   useEffect(() => {
     if (!session) {
@@ -53,7 +84,22 @@ export default function DriverAppPage() {
     return () => clearInterval(t);
   }, [session, navigate, loadJobs]);
 
+  useEffect(() => {
+    if (!session || jobIds.length === 0 || signedInLoggedRef.current) return;
+    signedInLoggedRef.current = true;
+    logActivity("signed_in", `Job ID(s): ${jobIds.join(", ")}`);
+  }, [session, jobIds, logActivity]);
+
+  useEffect(() => {
+    const prev = prevStatusRef.current;
+    if (prev === "requesting" && status === "error" && lastError?.trim()) {
+      logActivity("location_share_error", lastError.trim());
+    }
+    prevStatusRef.current = status;
+  }, [status, lastError, logActivity]);
+
   const logout = () => {
+    logActivity("signed_out");
     void stop();
     clearDriverSession();
     navigate("/driver", { replace: true });
@@ -61,19 +107,23 @@ export default function DriverAppPage() {
 
   const onStartLocation = async () => {
     if (!getSupabase()) {
+      logActivity("location_share_blocked_no_cloud");
       toast.error("Live map needs cloud sync", {
         description: "The office must use Supabase for positions to appear on Live Tracking.",
       });
       return;
     }
     if (!window.isSecureContext) {
+      logActivity("location_share_blocked_not_https");
       toast.error("Use HTTPS", { description: "Location works on the secure site (e.g. Vercel), not plain HTTP." });
       return;
     }
+    logActivity("location_share_started");
     start();
   };
 
   const onStopLocation = () => {
+    logActivity("location_share_stopped");
     void stop();
     toast.message("Location sharing stopped");
   };
@@ -176,7 +226,7 @@ export default function DriverAppPage() {
           <h2 className="text-xl font-semibold text-gray-900 sm:text-lg">Your jobs</h2>
           <button
             type="button"
-            onClick={() => void loadJobs()}
+            onClick={() => void loadJobs({ manual: true })}
             className="touch-manipulation flex min-h-11 items-center justify-center gap-2 rounded-xl border border-ht-border bg-white px-4 py-2.5 text-base font-medium text-ht-slate hover:bg-slate-50 disabled:opacity-50 sm:min-h-0 sm:border-0 sm:bg-transparent sm:px-2 sm:py-1 sm:text-sm sm:underline"
             disabled={loading}
           >
@@ -197,14 +247,21 @@ export default function DriverAppPage() {
               <Card key={j.id} className="rounded-2xl p-5 sm:p-4">
                 <div className="text-lg font-semibold text-gray-900 sm:text-base">{j.jobNumber}</div>
                 <div className="mt-1 text-base text-gray-700 sm:text-sm">{j.customerName}</div>
-                <div className="mt-3 line-clamp-6 whitespace-pre-wrap text-sm leading-relaxed text-gray-600 sm:text-xs">
-                  {formatAddressBlock(j, "collection")}
-                </div>
-                <div className="mt-2 line-clamp-6 whitespace-pre-wrap text-sm leading-relaxed text-gray-600 sm:text-xs">
-                  → {formatAddressBlock(j, "delivery")}
+                <div className="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-2 sm:gap-4">
+                  <DriverJobCardContent
+                    job={j}
+                    interactive
+                    jobIds={jobIds}
+                    onSaved={() => void loadJobs()}
+                    driverActivity={{
+                      vehicleReg,
+                      ...(driverName.trim() ? { driverName: driverName.trim() } : {}),
+                      jobIds,
+                    }}
+                  />
                 </div>
                 <div className="mt-4 text-sm font-medium capitalize text-ht-slate sm:mt-3 sm:text-xs">
-                  {j.status.replace("-", " ")}
+                  Status: {j.status.replace("-", " ")}
                 </div>
               </Card>
             ))}

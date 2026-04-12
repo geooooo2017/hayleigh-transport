@@ -22,7 +22,8 @@ export type FleetRoutesState = {
   loading: boolean;
 };
 
-function pinStableKey(pins: FleetDriverPin[]): string {
+/** Stable string for map effects — avoids re-running on new `driverPins` array refs from polling. */
+export function fleetMapDriverPinsKey(pins: FleetDriverPin[]): string {
   return pins
     .map((p) => {
       const n = p.driverName.trim().toLowerCase();
@@ -33,7 +34,8 @@ function pinStableKey(pins: FleetDriverPin[]): string {
     .join(";");
 }
 
-function jobsRouteKey(jobs: Job[]): string {
+/** Active-job geometry key for route fetch + map layer updates. */
+export function fleetMapJobsGeometryKey(jobs: Job[]): string {
   const active = jobs.filter((j) => j && j.status !== "completed");
   return active
     .map((j) => {
@@ -49,10 +51,11 @@ function jobsRouteKey(jobs: Job[]): string {
  * Fetches road geometry for the fleet map: planned collection→delivery legs, and driver→delivery when a pin matches the job.
  */
 export function useFleetDrivingRoutes(jobs: Job[], driverPins: FleetDriverPin[]): FleetRoutesState {
-  const [state, setState] = useState<FleetRoutesState>({ byJobId: {}, loading: false });
+  const [byJobId, setByJobId] = useState<Record<number, FleetRouteBundle>>({});
+  const [loading, setLoading] = useState(false);
 
-  const jobsKey = useMemo(() => jobsRouteKey(jobs), [jobs]);
-  const pinsKey = useMemo(() => pinStableKey(driverPins), [driverPins]);
+  const jobsKey = useMemo(() => fleetMapJobsGeometryKey(jobs), [jobs]);
+  const pinsKey = useMemo(() => fleetMapDriverPinsKey(driverPins), [driverPins]);
   const depsKey = `${jobsKey}##${pinsKey}`;
 
   useEffect(() => {
@@ -61,12 +64,13 @@ export function useFleetDrivingRoutes(jobs: Job[], driverPins: FleetDriverPin[])
 
     void (async () => {
       if (active.length === 0) {
-        setState({ byJobId: {}, loading: false });
+        setByJobId({});
+        setLoading(false);
         return;
       }
-      setState((s) => ({ ...s, loading: true }));
+      setLoading(true);
 
-      const byJobId: Record<number, FleetRouteBundle> = {};
+      const nextByJobId: Record<number, FleetRouteBundle> = {};
 
       for (const j of active) {
         if (cancelled) return;
@@ -79,7 +83,7 @@ export function useFleetDrivingRoutes(jobs: Job[], driverPins: FleetDriverPin[])
           !Number.isFinite(del.lat) ||
           !Number.isFinite(del.lng)
         ) {
-          byJobId[j.id] = { planLeg: null, driverLeg: null, matchedPin: null };
+          nextByJobId[j.id] = { planLeg: null, driverLeg: null, matchedPin: null };
           continue;
         }
 
@@ -99,11 +103,14 @@ export function useFleetDrivingRoutes(jobs: Job[], driverPins: FleetDriverPin[])
         }
         if (cancelled) return;
 
-        byJobId[j.id] = { planLeg, driverLeg, matchedPin };
+        nextByJobId[j.id] = { planLeg, driverLeg, matchedPin };
         await new Promise((r) => setTimeout(r, 60));
       }
 
-      if (!cancelled) setState({ byJobId, loading: false });
+      if (!cancelled) {
+        setByJobId(nextByJobId);
+        setLoading(false);
+      }
     })();
 
     return () => {
@@ -113,5 +120,5 @@ export function useFleetDrivingRoutes(jobs: Job[], driverPins: FleetDriverPin[])
     // eslint-disable-next-line react-hooks/exhaustive-deps -- intentional
   }, [depsKey]);
 
-  return state;
+  return useMemo(() => ({ byJobId, loading }), [byJobId, loading]);
 }

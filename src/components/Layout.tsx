@@ -1,4 +1,4 @@
-import { useState, type ReactNode } from "react";
+import { useCallback, useEffect, useLayoutEffect, useRef, useState, type ReactNode } from "react";
 import { Link, NavLink, Outlet, useLocation, useNavigate } from "react-router-dom";
 import {
   BarChart3,
@@ -6,6 +6,8 @@ import {
   ChevronRight,
   ClipboardList,
   FileBarChart,
+  FileText,
+  FileUp,
   Headphones,
   LayoutDashboard,
   LogOut,
@@ -20,11 +22,17 @@ import {
 } from "lucide-react";
 import { CompanyLogo } from "./CompanyLogo";
 import { HeaderSearch } from "./HeaderSearch";
+import { DriverAllocationRequestModal } from "./DriverAllocationRequestModal";
 import { NotificationsDropdown } from "./NotificationsDropdown";
 import { RouteErrorBoundary } from "./RouteErrorBoundary";
 import { useAuth } from "../context/AuthContext";
 import { useJobsSync } from "../context/JobsContext";
 import { PLATFORM_BASE, platformPath } from "../routes/paths";
+import {
+  applyStoredPlatformTheme,
+  PLATFORM_THEME_CHANGED_EVENT,
+  readStoredPlatformTheme,
+} from "../lib/platformTheme";
 
 const nav = [
   { name: "Dashboard", path: PLATFORM_BASE, icon: LayoutDashboard },
@@ -34,7 +42,9 @@ const nav = [
   { name: "Finance Calculator", path: platformPath("/finance-calculator"), icon: Calculator },
   { name: "Financial Tracking", path: platformPath("/financial-tracking"), icon: Wallet },
   { name: "Customer Invoicing", path: platformPath("/customer-invoicing"), icon: Receipt },
+  { name: "Supplier Invoicing", path: platformPath("/supplier-invoicing"), icon: FileUp },
   { name: "Customers", path: platformPath("/customers"), icon: Users },
+  { name: "Quotations", path: platformPath("/quotations"), icon: FileText },
   { name: "Drivers & Vehicles", path: platformPath("/drivers-vehicles"), icon: Truck },
   { name: "Statistics Centre", path: platformPath("/statistics"), icon: BarChart3 },
   { name: "Monthly Report", path: platformPath("/monthly-report"), icon: FileBarChart },
@@ -57,6 +67,23 @@ export function Layout() {
   const { syncMode, cloudLoading, cloudError } = useJobsSync();
   const navigate = useNavigate();
   const { pathname } = useLocation();
+  const themeRootRef = useRef<HTMLDivElement>(null);
+
+  const syncPlatformTheme = useCallback(() => {
+    const el = themeRootRef.current;
+    if (!el) return;
+    applyStoredPlatformTheme(readStoredPlatformTheme(), el);
+  }, []);
+
+  useLayoutEffect(() => {
+    syncPlatformTheme();
+  }, [syncPlatformTheme]);
+
+  useEffect(() => {
+    const onTheme = () => syncPlatformTheme();
+    window.addEventListener(PLATFORM_THEME_CHANGED_EVENT, onTheme);
+    return () => window.removeEventListener(PLATFORM_THEME_CHANGED_EVENT, onTheme);
+  }, [syncPlatformTheme]);
 
   const doLogout = () => {
     logout();
@@ -65,7 +92,11 @@ export function Layout() {
   };
 
   return (
-    <div className="min-h-screen bg-ht-canvas" style={{ fontFamily: "Inter, sans-serif" }}>
+    <div
+      ref={themeRootRef}
+      className="min-h-screen bg-ht-canvas text-[var(--color-ht-body-text)]"
+      style={{ fontFamily: "Inter, sans-serif" }}
+    >
       {open && (
         <button
           type="button"
@@ -216,6 +247,7 @@ export function Layout() {
           </RouteErrorBoundary>
         </div>
       </main>
+      <DriverAllocationRequestModal />
     </div>
   );
 }

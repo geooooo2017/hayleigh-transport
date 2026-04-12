@@ -1,4 +1,6 @@
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useLocalStorage } from "../hooks/useLocalStorage";
+import type { Vehicle } from "../types";
 import { Link } from "react-router-dom";
 import { useCustomerArrivalEtaAlerts } from "../hooks/useCustomerArrivalEtaAlerts";
 import { useJobs } from "../context/JobsContext";
@@ -7,31 +9,142 @@ import { FleetMap, type FleetDriverPin } from "../components/FleetMap";
 import { useFleetDrivingRoutes } from "../hooks/useFleetDrivingRoutes";
 import { formatEtaSummary } from "../lib/drivingDirections";
 import { formatJobCardDate } from "../lib/jobAddress";
-import { fetchDriverPositionsForMap } from "../lib/driverPositionsApi";
+import {
+  fetchDriverPositionsForMap,
+  OFFICE_DRIVER_POSITIONS_POLL_MS,
+  officeDriverPositionsPollDescription,
+} from "../lib/driverPositionsApi";
+import {
+  createLiveTrackingDemoJob,
+  fetchLiveTrackingDemoRoutePoints,
+  LIVE_TRACKING_DEMO_JOB_ID,
+  LIVE_TRACKING_DEMO_REG,
+  pointAlongDemoRoute,
+} from "../lib/liveTrackingCustomerDemo";
 import { platformPath } from "../routes/paths";
 
-const DRIVER_POLL_MS = 8000;
+const DEMO_ANIM_MS = 450;
+/** Refresh road-route geometry for the blue line occasionally (moving pin every frame would hammer OSRM). */
+const DEMO_ROUTE_PIN_MS = 12_000;
+const DEMO_CYCLE_MS = 95_000;
+
+function buildDemoFleetPin(lat: number, lng: number): FleetDriverPin {
+  return {
+    driverName: "Demo driver",
+    vehicleRegistration: LIVE_TRACKING_DEMO_REG,
+    jobIds: [LIVE_TRACKING_DEMO_JOB_ID],
+    lat,
+    lng,
+    updatedAt: new Date().toISOString(),
+  };
+}
 
 export default function LiveTrackingPage() {
   const [jobs, setJobs] = useJobs();
+  const [fleetVehicles] = useLocalStorage<Vehicle[]>("vehicles", []);
   const [driverPins, setDriverPins] = useState<FleetDriverPin[]>([]);
   const active = jobs.filter((j) => j.status !== "completed");
+
+  const demoJob = useMemo(() => createLiveTrackingDemoJob(), []);
+  const [customerDemoActive, setCustomerDemoActive] = useState(false);
+  const [customerDemoLoading, setCustomerDemoLoading] = useState(false);
+  const [demoRoutePoints, setDemoRoutePoints] = useState<[number, number][]>([]);
+  const [demoPinDisplay, setDemoPinDisplay] = useState<FleetDriverPin | null>(null);
+  const [demoRoutePin, setDemoRoutePin] = useState<FleetDriverPin | null>(null);
+  const demoPinDisplayRef = useRef<FleetDriverPin | null>(null);
+  demoPinDisplayRef.current = demoPinDisplay;
 
   useEffect(() => {
     const tick = () => void fetchDriverPositionsForMap().then(setDriverPins);
     tick();
-    const id = setInterval(tick, DRIVER_POLL_MS);
+    const id = setInterval(tick, OFFICE_DRIVER_POSITIONS_POLL_MS);
     return () => clearInterval(id);
   }, []);
 
+  useEffect(() => {
+    if (!customerDemoActive || demoRoutePoints.length < 2) return;
+    const id = window.setInterval(() => {
+      const t = Date.now();
+      const phase = (t % DEMO_CYCLE_MS) / DEMO_CYCLE_MS;
+      const frac = phase < 0.5 ? phase * 2 : 2 - phase * 2;
+      const [lat, lng] = pointAlongDemoRoute(demoRoutePoints, frac);
+      setDemoPinDisplay(buildDemoFleetPin(lat, lng));
+    }, DEMO_ANIM_MS);
+    return () => clearInterval(id);
+  }, [customerDemoActive, demoRoutePoints]);
+
+  useEffect(() => {
+    if (!customerDemoActive) {
+      setDemoRoutePin(null);
+      return;
+    }
+    const push = () => {
+      const p = demoPinDisplayRef.current;
+      if (p) setDemoRoutePin(p);
+    };
+    push();
+    const id = window.setInterval(push, DEMO_ROUTE_PIN_MS);
+    return () => clearInterval(id);
+  }, [customerDemoActive]);
+
+  const startCustomerDemo = useCallback(async () => {
+    setCustomerDemoLoading(true);
+    try {
+      const pts = await fetchLiveTrackingDemoRoutePoints();
+      setDemoRoutePoints(pts);
+      const [lat, lng] = pointAlongDemoRoute(pts, 0);
+      const initial = buildDemoFleetPin(lat, lng);
+      setDemoPinDisplay(initial);
+      setDemoRoutePin(initial);
+      setCustomerDemoActive(true);
+    } finally {
+      setCustomerDemoLoading(false);
+    }
+  }, []);
+
+  const stopCustomerDemo = useCallback(() => {
+    setCustomerDemoActive(false);
+    setDemoPinDisplay(null);
+    setDemoRoutePin(null);
+    setDemoRoutePoints([]);
+  }, []);
+
+  const mapJobs = useMemo(() => {
+    if (!customerDemoActive) return jobs;
+    const rest = jobs.filter((j) => j.id !== LIVE_TRACKING_DEMO_JOB_ID);
+    return [...rest, demoJob];
+  }, [customerDemoActive, jobs, demoJob]);
+
+  const pinsForMap =
+    customerDemoActive && demoPinDisplay ? [demoPinDisplay] : driverPins;
+  const pinsForRoutes =
+    customerDemoActive && demoRoutePin ? [demoRoutePin] : driverPins;
+
   useCustomerArrivalEtaAlerts(jobs, driverPins, setJobs);
-  const fleetRoutes = useFleetDrivingRoutes(jobs, driverPins);
+  const fleetRoutes = useFleetDrivingRoutes(mapJobs, pinsForRoutes);
 
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="text-2xl font-semibold text-gray-900 lg:text-3xl">Live Tracking</h1>
-        <p className="mt-1 text-gray-500">Monitor active jobs on the road</p>
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+        <div>
+          <h1 className="text-2xl font-semibold text-gray-900 lg:text-3xl">Live Tracking</h1>
+          <p className="mt-1 text-gray-500">Monitor active jobs on the road</p>
+        </div>
+        <div className="flex shrink-0 flex-wrap gap-2">
+          {customerDemoActive ? (
+            <Btn variant="outline" className="text-sm" onClick={stopCustomerDemo}>
+              Stop customer demo
+            </Btn>
+          ) : (
+            <Btn
+              className="text-sm"
+              disabled={customerDemoLoading}
+              onClick={() => void startCustomerDemo()}
+            >
+              {customerDemoLoading ? "Preparing demo…" : "Customer demo (no GPS)"}
+            </Btn>
+          )}
+        </div>
       </div>
 
       <Card className="space-y-3 p-5">
@@ -63,13 +176,25 @@ export default function LiveTrackingPage() {
             prompt. Keep sharing turned on while on the road so this page can show their position.
           </li>
           <li>
-            <strong>Office — refresh.</strong> This page reloads driver positions about every {DRIVER_POLL_MS / 1000} seconds;
-            the green driver dot should appear near their GPS fix while the job stays active.
+            <strong>Office — refresh.</strong> This page reloads driver positions about every {officeDriverPositionsPollDescription()};
+            the live vehicle icon should appear near their GPS fix while the job stays active.
+          </li>
+          <li>
+            <strong>Showroom — customer demo.</strong> Use <strong>Customer demo (no GPS)</strong> above to play a short simulated
+            rigid HGV moving between two UK points (~6 miles on roads when routing loads). Nothing is saved; it does not use real
+            driver positions.
           </li>
         </ol>
       </Card>
 
-      <FleetMap jobs={jobs} driverPins={driverPins} fleetRoutes={fleetRoutes} />
+      {customerDemoActive ? (
+        <p className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-950">
+          <strong>Customer demo active:</strong> simulated vehicle and job only — your real GPS feeds are hidden until you stop
+          the demo.
+        </p>
+      ) : null}
+
+      <FleetMap jobs={mapJobs} driverPins={pinsForMap} fleetRoutes={fleetRoutes} fleetVehicles={fleetVehicles} />
 
       {active.length === 0 ? (
         <Card className="p-8 text-center text-gray-600">

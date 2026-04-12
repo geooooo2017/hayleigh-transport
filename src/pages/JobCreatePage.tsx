@@ -20,10 +20,13 @@ import {
 import { loadSavedJobAddresses, saveSavedJobAddresses } from "../lib/userSavedAddresses";
 import { isValidUkPostcodeFormat } from "../lib/ukPostcode";
 import { allocateJobNumber, previewJobNumber } from "../lib/jobNumbers";
-import type { Job } from "../types";
+import { formatVehicleRegistrationDisplay } from "../lib/driverPositionsApi";
+import type { Job, LiveMapVehicleIconPreference } from "../types";
+import { LIVE_MAP_VEHICLE_ICON_OPTIONS } from "../lib/fleetVehicleMapIcon";
 import { MissingFieldLegend, ReqStar, WhyThisSection } from "../components/FormGuidance";
 import { Btn, Card } from "../components/Layout";
 import { platformPath } from "../routes/paths";
+import { computeJobGpExVat } from "../lib/jobProfit";
 import { looksLikeEmail } from "../lib/podMailto";
 import { joinStructuredAddressLines, splitSavedAddressLines } from "../lib/addressStructured";
 import type { PlaceResolvedPayload } from "../lib/googlePlaceToAddress";
@@ -44,6 +47,7 @@ export default function JobCreatePage() {
   const [customerEmail, setCustomerEmail] = useState("");
   const [carrier, setCarrier] = useState("");
   const [truckPlates, setTruckPlates] = useState("");
+  const [liveMapVehicleIcon, setLiveMapVehicleIcon] = useState<LiveMapVehicleIconPreference>("auto");
   const [assignedDriverName, setAssignedDriverName] = useState("");
   const [cOrg, setCOrg] = useState("");
   const [cLine1, setCLine1] = useState("");
@@ -135,8 +139,14 @@ export default function JobCreatePage() {
   const sell = parseFloat(sellPrice) || 0;
   const fuel = parseFloat(fuelSurcharge) || 0;
   const extra = parseFloat(extraCharges) || 0;
-  const profit = sell - buy - fuel - extra;
-  const margin = sell > 0 ? (profit / sell) * 100 : 0;
+  const gp = computeJobGpExVat({
+    buyPrice: buy,
+    sellPrice: sell,
+    fuelSurcharge: fuel,
+    extraCharges: extra,
+  });
+  const profit = gp.profit;
+  const margin = gp.margin;
 
   const marginClass =
     margin < 0 ? "text-red-600" : margin < 15 ? "text-orange-600" : margin < 25 ? "text-yellow-600" : "text-green-600";
@@ -274,7 +284,7 @@ export default function JobCreatePage() {
       customerName,
       customerEmail: customerEmail.trim() || undefined,
       carrier,
-      truckPlates,
+      truckPlates: formatVehicleRegistrationDisplay(truckPlates),
       assignedDriverName: assignedDriverName.trim() || undefined,
       buyPrice: buy,
       sellPrice: sell,
@@ -311,6 +321,7 @@ export default function JobCreatePage() {
       status: "scheduled",
       officeRevision: 0,
       officeUpdatedAt: new Date().toISOString(),
+      ...(liveMapVehicleIcon !== "auto" ? { liveMapVehicleIcon } : {}),
     };
     setJobs((prev) => [...prev, job]);
     saveSavedJobAddresses(user.id, {
@@ -471,10 +482,29 @@ export default function JobCreatePage() {
               </label>
               <input
                 value={truckPlates}
-                onChange={(e) => setTruckPlates(e.target.value)}
+                onChange={(e) => setTruckPlates(formatVehicleRegistrationDisplay(e.target.value))}
                 placeholder="e.g., AB12 CDE"
-                className="w-full rounded-lg border border-gray-200 px-3 py-2"
+                className="w-full rounded-lg border border-gray-200 px-3 py-2 uppercase"
               />
+            </div>
+            <div className="md:col-span-2">
+              <label className="mb-1 block text-sm font-medium">
+                Live Tracking map icon
+                <span className="ml-1 text-xs font-normal text-gray-500">
+                  (optional — or set per fleet vehicle on Drivers &amp; Vehicles)
+                </span>
+              </label>
+              <select
+                value={liveMapVehicleIcon}
+                onChange={(e) => setLiveMapVehicleIcon(e.target.value as LiveMapVehicleIconPreference)}
+                className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm"
+              >
+                {LIVE_MAP_VEHICLE_ICON_OPTIONS.map((o) => (
+                  <option key={o.value} value={o.value}>
+                    {o.label}
+                  </option>
+                ))}
+              </select>
             </div>
             <div className="md:col-span-2">
               <label className="mb-1 block text-sm font-medium">
@@ -724,11 +754,11 @@ export default function JobCreatePage() {
           <div className="mt-6 rounded-lg border-2 border-slate-200 bg-gray-50 p-4">
             <div className="flex flex-wrap justify-between gap-4">
               <div>
-                <div className="text-sm text-gray-600">Estimated Profit</div>
+                <div className="text-sm text-gray-600">Estimated GP (ex VAT)</div>
                 <div className={`text-2xl font-semibold ${marginClass}`}>£{profit.toFixed(2)}</div>
               </div>
               <div>
-                <div className="text-sm text-gray-600">Margin</div>
+                <div className="text-sm text-gray-600">Margin vs customer net</div>
                 <div className={`text-2xl font-semibold ${marginClass}`}>{margin.toFixed(1)}%</div>
               </div>
             </div>

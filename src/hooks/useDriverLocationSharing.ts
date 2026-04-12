@@ -3,13 +3,20 @@ import { deleteDriverPosition, upsertDriverPosition } from "../lib/driverPositio
 
 type Status = "idle" | "requesting" | "active" | "error";
 
-export function useDriverLocationSharing(driverName: string, vehicleRegistration: string, jobIds: number[]) {
+export function useDriverLocationSharing(
+  driverName: string,
+  vehicleRegistration: string,
+  jobIds: number[],
+  opts?: { onFirstGpsSuccess?: () => void }
+) {
+  const onFirstGpsSuccess = opts?.onFirstGpsSuccess;
   const [status, setStatus] = useState<Status>("idle");
   const [lastError, setLastError] = useState<string | null>(null);
   const [lastUpdated, setLastUpdated] = useState<string | null>(null);
   const watchIdRef = useRef<number | null>(null);
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const lastSentRef = useRef<{ lat: number; lng: number; t: number } | null>(null);
+  const firstGpsLoggedRef = useRef(false);
 
   const stop = useCallback(async () => {
     if (watchIdRef.current != null) {
@@ -24,19 +31,27 @@ export function useDriverLocationSharing(driverName: string, vehicleRegistration
     setStatus("idle");
     setLastError(null);
     lastSentRef.current = null;
+    firstGpsLoggedRef.current = false;
   }, [vehicleRegistration, jobIds]);
 
-  const pushPosition = useCallback(async (lat: number, lng: number) => {
-    const r = await upsertDriverPosition({ driverName, vehicleRegistration, jobIds, lat, lng });
-    if (!r.ok) {
-      setLastError(r.error ?? "Could not save location");
-      setStatus("error");
-      return;
-    }
-    setLastError(null);
-    setLastUpdated(new Date().toISOString());
-    setStatus("active");
-  }, [driverName, vehicleRegistration, jobIds]);
+  const pushPosition = useCallback(
+    async (lat: number, lng: number) => {
+      const r = await upsertDriverPosition({ driverName, vehicleRegistration, jobIds, lat, lng });
+      if (!r.ok) {
+        setLastError(r.error ?? "Could not save location");
+        setStatus("error");
+        return;
+      }
+      if (!firstGpsLoggedRef.current) {
+        firstGpsLoggedRef.current = true;
+        onFirstGpsSuccess?.();
+      }
+      setLastError(null);
+      setLastUpdated(new Date().toISOString());
+      setStatus("active");
+    },
+    [driverName, vehicleRegistration, jobIds, onFirstGpsSuccess]
+  );
 
   const start = useCallback(() => {
     setLastError(null);

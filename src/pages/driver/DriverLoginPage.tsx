@@ -1,12 +1,16 @@
 import { useMemo, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { MapPin, Truck } from "lucide-react";
+import { toast } from "sonner";
 import { MissingFieldLegend, ReqStar, WhyThisSection } from "../../components/FormGuidance";
 import { Btn, Card } from "../../components/Layout";
 import { DRIVER_LOGIN_WHY, DRIVER_REQ } from "../../lib/fieldRequirementCopy";
-import { verifyDriverJobs } from "../../lib/driverJobGate";
+import { evaluateDriverLogin } from "../../lib/driverJobGate";
+import { formatVehicleRegistrationDisplay } from "../../lib/driverPositionsApi";
+import { patchPendingDriverAllocationRequests } from "../../lib/patchPendingDriverAllocationRequests";
 import { fetchJobsSnapshot } from "../../lib/jobsSnapshot";
 import { writeDriverSession } from "../../lib/driverSession";
+import { TEST_JOB_DRIVER_PORTAL_REGISTRATION } from "../../lib/seedTestJob";
 
 const fieldClass =
   "min-h-12 w-full rounded-xl border-2 border-gray-200 bg-white px-4 py-3 text-base text-gray-900 shadow-sm outline-none transition placeholder:text-gray-400 focus:border-ht-slate focus:ring-2 focus:ring-ht-slate/20";
@@ -32,22 +36,60 @@ export default function DriverLoginPage() {
     setError("");
     setBusy(true);
     try {
-      const reg = vehicle.trim();
+      const reg = formatVehicleRegistrationDisplay(vehicle);
       if (!reg) {
         setError("Enter your vehicle registration.");
         return;
       }
 
       const jobs = await fetchJobsSnapshot();
-      const result = verifyDriverJobs(jobs, reg, jobNumbers);
-      if (!result.ok) {
-        setError(result.message);
+      const name = driverName.trim();
+      const ev = evaluateDriverLogin(jobs, vehicle, jobNumbers, name);
+
+      if (ev.kind === "error") {
+        setError(ev.message);
         return;
       }
-      const name = driverName.trim();
+
+      if (ev.kind === "needs_office") {
+        const requestedAt = new Date().toISOString();
+        const request = {
+          vehicleReg: ev.vehicleRegDisplay,
+          ...(ev.driverName ? { driverName: ev.driverName } : {}),
+          requestedAt,
+        };
+        const patch = await patchPendingDriverAllocationRequests({
+          updates: ev.pendingTargets.map((j) => ({ jobId: j.id, request })),
+        });
+        if (!patch.ok) {
+          setError(patch.error ?? "Could not notify the office. Try again or ask them to check cloud sync.");
+          return;
+        }
+
+        const pendingLabels = ev.pendingTargets.map((j) => j.jobNumber).join(", ");
+        if (ev.matchedJobs.length > 0) {
+          writeDriverSession({
+            vehicleReg: ev.vehicleRegDisplay,
+            jobIds: ev.matchedJobs.map((j) => j.id),
+            ...(name ? { driverName: name } : {}),
+          });
+          toast.message("Signed in for your confirmed jobs", {
+            description: `The office was asked to add your vehicle to: ${pendingLabels}. Sign in again later to load those jobs, or continue with the jobs that already matched.`,
+            duration: 12_000,
+          });
+          navigate("/driver/app", { replace: true });
+        } else {
+          toast.success("Office notified", {
+            description: `Ask the office to confirm ${ev.vehicleRegDisplay} on job(s): ${pendingLabels}. Then sign in here again.`,
+            duration: 14_000,
+          });
+        }
+        return;
+      }
+
       writeDriverSession({
         vehicleReg: reg,
-        jobIds: result.jobs.map((j) => j.id),
+        jobIds: ev.jobs.map((j) => j.id),
         ...(name ? { driverName: name } : {}),
       });
       navigate("/driver/app", { replace: true });
@@ -95,7 +137,7 @@ export default function DriverLoginPage() {
               <input
                 id="driver-vrm"
                 value={vehicle}
-                onChange={(e) => setVehicle(e.target.value)}
+                onChange={(e) => setVehicle(formatVehicleRegistrationDisplay(e.target.value))}
                 className={`${fieldClass} uppercase`}
                 placeholder="e.g. AB12 CDE"
                 autoComplete="off"
@@ -158,6 +200,13 @@ export default function DriverLoginPage() {
             <MapPin className="mt-0.5 h-4 w-4 shrink-0 text-gray-400" aria-hidden />
             <span>Optional: after sign-in you can share your location for the control room map.</span>
           </span>
+        </p>
+        <p className="mx-auto mt-4 max-w-sm rounded-xl border border-slate-200 bg-white/80 px-4 py-3 text-center text-xs leading-snug text-slate-700 shadow-sm">
+          <span className="font-semibold text-ht-slate">Office test job:</span> if you used{" "}
+          <strong>Jobs → Test job</strong>, sign in with vehicle{" "}
+          <code className="rounded bg-slate-100 px-1 font-mono text-[11px]">{TEST_JOB_DRIVER_PORTAL_REGISTRATION}</code> as
+          vehicle registration and the <strong>exact job number</strong> from the toast or jobs table (registration must match
+          truck plates on the job).
         </p>
         <nav
           className="mt-6 flex flex-col gap-1 sm:flex-row sm:flex-wrap sm:justify-center sm:gap-x-4 sm:gap-y-2"

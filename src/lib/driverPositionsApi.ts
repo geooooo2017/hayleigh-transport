@@ -24,6 +24,11 @@ export function normalizeVehiclePlate(s: string): string {
   return s.replace(/\s+/g, "").toLowerCase();
 }
 
+/** Store and show registrations in uppercase with single spaces (UK-style). */
+export function formatVehicleRegistrationDisplay(s: string): string {
+  return s.trim().replace(/\s+/g, " ").toUpperCase();
+}
+
 /** Push current GPS (call periodically while sharing). */
 export async function upsertDriverPosition(params: {
   driverName: string;
@@ -42,7 +47,7 @@ export async function upsertDriverPosition(params: {
     {
       driver_key: key,
       driver_name: displayName,
-      vehicle_registration: params.vehicleRegistration.trim(),
+      vehicle_registration: formatVehicleRegistrationDisplay(params.vehicleRegistration),
       job_ids: jobIds,
       lat: params.lat,
       lng: params.lng,
@@ -68,6 +73,26 @@ export async function deleteDriverPosition(
 }
 
 const STALE_MS = 45 * 60 * 1000;
+
+/**
+ * How often office pages (Dashboard, Live Tracking) **read** `driver_positions` from Supabase.
+ * This does not add rows: each active driver session is still one upserted row; only API read volume changes.
+ * Driver phones push on their own schedule (see `useDriverLocationSharing` — typically ~20s when moving).
+ */
+export const OFFICE_DRIVER_POSITIONS_POLL_MS = 15 * 60 * 1000;
+
+/** For in-app copy next to the poll interval constant. */
+export function officeDriverPositionsPollDescription(): string {
+  const ms = OFFICE_DRIVER_POSITIONS_POLL_MS;
+  if (ms >= 60_000) {
+    const minutes = ms / 60_000;
+    if (minutes === Math.floor(minutes)) {
+      return `${minutes} minute${minutes === 1 ? "" : "s"}`;
+    }
+  }
+  const sec = Math.max(1, Math.round(ms / 1000));
+  return `${sec} second${sec === 1 ? "" : "s"}`;
+}
 
 /** Pins for the map (recent fixes only). */
 export async function fetchDriverPositionsForMap(): Promise<DriverMapPin[]> {

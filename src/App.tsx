@@ -9,6 +9,7 @@ import MarketingContact from "./pages/marketing/MarketingContact";
 import MarketingHome from "./pages/marketing/MarketingHome";
 import TechnicalSupportReportPage from "./pages/TechnicalSupportReportPage";
 import CustomerInvoicingPage from "./pages/CustomerInvoicingPage";
+import SupplierInvoicingPage from "./pages/SupplierInvoicingPage";
 import CustomersPage from "./pages/CustomersPage";
 import DashboardPage from "./pages/DashboardPage";
 import DriversVehiclesPage from "./pages/DriversVehiclesPage";
@@ -18,19 +19,24 @@ import JobBoardPage from "./pages/JobBoardPage";
 import JobCreatePage from "./pages/JobCreatePage";
 import JobDetailPage from "./pages/JobDetailPage";
 import JobsPage from "./pages/JobsPage";
+import StaffDriverJobViewPage from "./pages/StaffDriverJobViewPage";
 import LiveTrackingPage from "./pages/LiveTrackingPage";
 import LoginPage from "./pages/LoginPage";
 import MonthlyReportPage from "./pages/MonthlyReportPage";
 import QuotePage from "./pages/QuotePage";
+import QuotationDetailPage from "./pages/QuotationDetailPage";
+import QuotationsPage from "./pages/QuotationsPage";
 import SettingsPage from "./pages/SettingsPage";
 import StatisticsPage from "./pages/StatisticsPage";
 import DriverAppPage from "./pages/driver/DriverAppPage";
 import { DriverAreaLayout } from "./pages/driver/DriverAreaLayout";
 import DriverLoginPage from "./pages/driver/DriverLoginPage";
+import OneDriveCallbackPage from "./pages/OneDriveCallbackPage";
 
 export default function App() {
   return (
     <Routes>
+      <Route path="/onedrive-callback" element={<OneDriveCallbackPage />} />
       <Route path="/welcome" element={<Navigate to="/login" replace />} />
       <Route path="/login" element={<LoginPage />} />
       <Route element={<DriverAreaLayout />}>
@@ -62,12 +68,16 @@ export default function App() {
         <Route path="job-board" element={<JobBoardPage />} />
         <Route path="jobs" element={<JobsPage />} />
         <Route path="jobs/create" element={<JobCreatePage />} />
+        <Route path="jobs/:jobId/driver-view" element={<StaffDriverJobViewPage />} />
         <Route path="jobs/:jobId" element={<JobDetailPage />} />
         <Route path="live-tracking" element={<LiveTrackingPage />} />
         <Route path="finance-calculator" element={<FinanceCalculatorPage />} />
         <Route path="financial-tracking" element={<FinancialTrackingPage />} />
         <Route path="customer-invoicing" element={<CustomerInvoicingPage />} />
+        <Route path="supplier-invoicing" element={<SupplierInvoicingPage />} />
         <Route path="customers" element={<CustomersPage />} />
+        <Route path="quotations" element={<QuotationsPage />} />
+        <Route path="quotations/:quotationId" element={<QuotationDetailPage />} />
         <Route path="drivers-vehicles" element={<DriversVehiclesPage />} />
         <Route path="statistics" element={<StatisticsPage />} />
         <Route path="monthly-report" element={<MonthlyReportPage />} />

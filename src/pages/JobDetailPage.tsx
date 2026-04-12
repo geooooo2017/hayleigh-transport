@@ -17,6 +17,8 @@ import {
   Truck,
 } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { DriverPortalActivityPanel } from "../components/DriverPortalActivityPanel";
+import { JobManualProgressCard } from "../components/JobManualProgressCard";
 import { JobLifecycleTimeline } from "../components/JobLifecycleTimeline";
 import { useAuth } from "../context/AuthContext";
 import { useJobRecycleBin, useJobs } from "../context/JobsContext";
@@ -38,7 +40,10 @@ import {
   buildDriverUpdateSmsUrl,
   ETA_ASSUMED_SPEED_KMH,
 } from "../lib/customerNotifications";
-import { geocodeNominatimQuery } from "../lib/jobAddress";
+import { formatDriverIssueKindLabel } from "../lib/driverIssueCommon";
+import { formatVehicleRegistrationDisplay } from "../lib/driverPositionsApi";
+import { formatDriverDeliveryEtaDisplay, geocodeNominatimQuery } from "../lib/jobAddress";
+import { jobHasDriverReportedIssue } from "../lib/jobBoardVisual";
 import {
   getCollectionAddressIssues,
   getDeliveryAddressIssues,
@@ -57,11 +62,13 @@ import {
   REQ,
 } from "../lib/fieldRequirementCopy";
 import { getUserCompanyDetails } from "../lib/userCompanyProfile";
-import type { Job } from "../types";
+import type { Job, LiveMapVehicleIconPreference } from "../types";
+import { LIVE_MAP_VEHICLE_ICON_OPTIONS } from "../lib/fleetVehicleMapIcon";
 import { notifyError, notifyMessage, notifySuccess } from "../lib/platformNotify";
 import { MissingFieldLegend, ReqStar, WhyThisSection } from "../components/FormGuidance";
 import { Btn, Card } from "../components/Layout";
 import { platformPath } from "../routes/paths";
+import { computeJobGpExVat } from "../lib/jobProfit";
 import { joinStructuredAddressLines, splitSavedAddressLines } from "../lib/addressStructured";
 import type { PlaceResolvedPayload } from "../lib/googlePlaceToAddress";
 import { StructuredSiteAddressFields } from "../components/StructuredSiteAddressFields";
@@ -100,6 +107,7 @@ export default function JobDetailPage() {
   const [coreScheduledDay, setCoreScheduledDay] = useState("");
   const [coreCarrier, setCoreCarrier] = useState("");
   const [coreTruckPlates, setCoreTruckPlates] = useState("");
+  const [coreLiveMapVehicleIcon, setCoreLiveMapVehicleIcon] = useState<LiveMapVehicleIconPreference>("auto");
   const [finBuy, setFinBuy] = useState("");
   const [finSell, setFinSell] = useState("");
   const [finFuel, setFinFuel] = useState("");
@@ -211,6 +219,7 @@ export default function JobDetailPage() {
     setCoreScheduledDay(job.scheduledDay ?? "");
     setCoreCarrier(job.carrier ?? "");
     setCoreTruckPlates(job.truckPlates ?? "");
+    setCoreLiveMapVehicleIcon(job.liveMapVehicleIcon ?? "auto");
     setFinBuy(String(job.buyPrice ?? ""));
     setFinSell(String(job.sellPrice ?? ""));
     setFinFuel(String(job.fuelSurcharge ?? ""));
@@ -247,20 +256,26 @@ export default function JobDetailPage() {
     setSessionLargePodName(null);
   }, [job?.id]);
 
+  /** Keep status & paperwork dropdowns aligned when job is patched (e.g. manual progression card). */
   useEffect(() => {
     if (!job) return;
+    setCoreStatus(job.status);
+    setCoreInvoiceSent(job.invoiceSent === "yes" ? "yes" : "no");
     setSheetPodReceived(job.podReceived === "yes" ? "yes" : "no");
-  }, [job?.id, job?.podReceived]);
+    setSheetSupplierInvRec(job.supplierInvoiceReceived === "yes" ? "yes" : "no");
+  }, [job?.id, job?.status, job?.invoiceSent, job?.podReceived, job?.supplierInvoiceReceived]);
 
   const pricingPreview = useMemo(() => {
-    const buy = parseFloat(finBuy) || 0;
-    const sell = parseFloat(finSell) || 0;
-    const fuel = parseFloat(finFuel) || 0;
-    const extra = parseFloat(finExtra) || 0;
-    const profit = sell - buy - fuel - extra;
-    const margin = sell > 0 ? (profit / sell) * 100 : 0;
-    return { profit, margin };
-  }, [finBuy, finSell, finFuel, finExtra]);
+    if (!job) return { profit: 0, margin: 0 };
+    const draft = {
+      ...job,
+      buyPrice: parseFloat(finBuy) || 0,
+      sellPrice: parseFloat(finSell) || 0,
+      fuelSurcharge: parseFloat(finFuel) || 0,
+      extraCharges: parseFloat(finExtra) || 0,
+    };
+    return computeJobGpExVat(draft);
+  }, [job, finBuy, finSell, finFuel, finExtra]);
 
   const addressFormIssues = useMemo(
     () =>
@@ -592,6 +607,11 @@ export default function JobDetailPage() {
         </div>
         <div className="flex flex-wrap items-center gap-2 sm:gap-3">
           {statusBadge(job.status)}
+          <Link to={platformPath(`/jobs/${id}/driver-view`)}>
+            <Btn variant="outline" className="gap-2" type="button" title="Same card as the driver portal app (read-only)">
+              <Smartphone size={16} aria-hidden /> Driver portal view
+            </Btn>
+          </Link>
           <Btn
             variant="outline"
             className="gap-2"
@@ -653,6 +673,10 @@ export default function JobDetailPage() {
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
         <div className="lg:col-span-2">
           <JobLifecycleTimeline job={job} />
+        </div>
+
+        <div className="lg:col-span-2">
+          <JobManualProgressCard job={job} jobDetailPath={platformPath(`/jobs/${id}`)} onPatch={patchJob} />
         </div>
 
         <Card className="p-6 md:col-span-2">
@@ -801,9 +825,28 @@ export default function JobDetailPage() {
               </label>
               <input
                 value={coreTruckPlates}
-                onChange={(e) => setCoreTruckPlates(e.target.value)}
-                className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm"
+                onChange={(e) => setCoreTruckPlates(formatVehicleRegistrationDisplay(e.target.value))}
+                className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm uppercase"
               />
+            </div>
+            <div className="lg:col-span-2">
+              <label className="mb-1 block text-xs font-medium text-gray-600">
+                Live Tracking map icon
+                <span className="ml-1 font-normal text-gray-500">
+                  (optional — fleet vehicle with same reg overrides this)
+                </span>
+              </label>
+              <select
+                value={coreLiveMapVehicleIcon}
+                onChange={(e) => setCoreLiveMapVehicleIcon(e.target.value as LiveMapVehicleIconPreference)}
+                className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm"
+              >
+                {LIVE_MAP_VEHICLE_ICON_OPTIONS.map((o) => (
+                  <option key={o.value} value={o.value}>
+                    {o.label}
+                  </option>
+                ))}
+              </select>
             </div>
             <div className="lg:col-span-2">
               <label className="mb-1 block text-xs font-medium text-gray-600">
@@ -853,7 +896,8 @@ export default function JobDetailPage() {
                   status: coreStatus,
                   scheduledDay: coreScheduledDay.trim() || undefined,
                   carrier: coreCarrier.trim(),
-                  truckPlates: coreTruckPlates.trim(),
+                  truckPlates: formatVehicleRegistrationDisplay(coreTruckPlates),
+                  liveMapVehicleIcon: coreLiveMapVehicleIcon === "auto" ? undefined : coreLiveMapVehicleIcon,
                 };
                 if (coreStatus === "completed") {
                   updates.invoiceSent = coreInvoiceSent;
@@ -878,6 +922,56 @@ export default function JobDetailPage() {
           </div>
         </Card>
 
+        {job.pendingDriverAllocationRequest ? (
+          <Card className="border-2 border-amber-400 bg-amber-50/90 p-5 md:col-span-2">
+            <div className="flex flex-wrap items-start justify-between gap-3">
+              <div className="min-w-0">
+                <h2 className="text-base font-semibold text-amber-950">Driver asked to sign in (live tracking)</h2>
+                <p className="mt-2 text-sm text-amber-950/90">
+                  Registration <strong className="font-mono tracking-wide">{job.pendingDriverAllocationRequest.vehicleReg}</strong>
+                  {job.pendingDriverAllocationRequest.driverName?.trim() ? (
+                    <>
+                      {" "}
+                      — name given: <strong>{job.pendingDriverAllocationRequest.driverName.trim()}</strong>
+                    </>
+                  ) : null}
+                  . This job had no truck registration yet. Confirm to set truck plates and optional driver name, or dismiss if
+                  it was a mistake.
+                </p>
+              </div>
+              <div className="flex shrink-0 flex-wrap gap-2">
+                <Btn
+                  type="button"
+                  variant="outline"
+                  onClick={() => {
+                    patchJob({ pendingDriverAllocationRequest: undefined });
+                    notifySuccess("Request dismissed", { href: platformPath(`/jobs/${id}`) });
+                  }}
+                >
+                  Dismiss
+                </Btn>
+                <Btn
+                  type="button"
+                  className="bg-amber-800 text-white hover:bg-amber-900"
+                  onClick={() => {
+                    const p = job.pendingDriverAllocationRequest!;
+                    patchJob({
+                      truckPlates: formatVehicleRegistrationDisplay(p.vehicleReg),
+                      ...(p.driverName?.trim() ? { assignedDriverName: p.driverName.trim() } : {}),
+                      pendingDriverAllocationRequest: undefined,
+                    });
+                    notifySuccess("Vehicle assigned — driver can sign in", { href: platformPath(`/jobs/${id}`) });
+                  }}
+                >
+                  Assign vehicle to job
+                </Btn>
+              </div>
+            </div>
+          </Card>
+        ) : null}
+
+        <DriverPortalActivityPanel job={job} className="md:col-span-2" />
+
         <Card className="p-6 md:col-span-2">
           <h2 className="mb-2 flex items-center gap-2 text-lg font-semibold text-gray-900">
             <MapPin size={20} /> Collection & delivery details
@@ -888,6 +982,56 @@ export default function JobDetailPage() {
             emails are optional. Incomplete required fields still appear in the notifications bell.
           </p>
           <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
+            <div className="lg:col-span-2 space-y-3">
+              {job.driverDeliveryEtaAt ? (
+                <div className="flex gap-3 rounded-lg border-2 border-green-500 bg-green-50/95 p-4 shadow-sm">
+                  <Clock className="mt-0.5 h-5 w-5 shrink-0 text-green-800" aria-hidden />
+                  <div className="min-w-0">
+                    <div className="text-sm font-semibold text-green-900">Driver ETA to delivery</div>
+                    <p className="mt-1 text-lg font-semibold text-green-950 sm:text-base">
+                      {formatDriverDeliveryEtaDisplay(job.driverDeliveryEtaAt)}
+                    </p>
+                    {job.driverDeliveryEtaUpdatedAt ? (
+                      <p className="mt-1 text-xs text-green-800/90">
+                        Driver last updated: {formatDriverDeliveryEtaDisplay(job.driverDeliveryEtaUpdatedAt)}
+                      </p>
+                    ) : null}
+                  </div>
+                </div>
+              ) : (
+                <p className="text-xs text-gray-500">No driver-submitted delivery ETA yet — drivers can set this from their job screen after sign-in.</p>
+              )}
+              {jobHasDriverReportedIssue(job) && job.driverReportedIssue ? (
+                <div className="flex flex-wrap items-start justify-between gap-3 rounded-lg border-2 border-red-600 bg-red-50 p-4 shadow-sm">
+                  <div className="flex min-w-0 gap-3">
+                    <AlertTriangle className="mt-0.5 h-6 w-6 shrink-0 text-red-700" aria-hidden />
+                    <div className="min-w-0">
+                      <div className="text-sm font-bold uppercase tracking-wide text-red-900">Driver-reported issue</div>
+                      <p className="mt-1 text-base font-semibold text-red-950">
+                        {formatDriverIssueKindLabel(job.driverReportedIssue.kind)}
+                      </p>
+                      {job.driverReportedIssue.notes?.trim() ? (
+                        <p className="mt-2 whitespace-pre-wrap text-sm text-red-900/90">{job.driverReportedIssue.notes.trim()}</p>
+                      ) : null}
+                      <p className="mt-2 text-xs text-red-800/90">
+                        Reported {formatDriverDeliveryEtaDisplay(job.driverReportedIssue.reportedAt)}
+                      </p>
+                    </div>
+                  </div>
+                  <Btn
+                    type="button"
+                    variant="outline"
+                    className="shrink-0 border-red-300 text-sm text-red-900 hover:bg-red-100"
+                    onClick={() => {
+                      patchJob({ driverReportedIssue: undefined });
+                      notifySuccess("Driver report cleared on job", { href: platformPath(`/jobs/${id}`) });
+                    }}
+                  >
+                    Clear driver report
+                  </Btn>
+                </div>
+              ) : null}
+            </div>
             <div className="space-y-3 rounded-lg border border-emerald-200/80 bg-emerald-50/30 p-4">
               <StructuredSiteAddressFields
                 title="Collection"
@@ -1263,28 +1407,45 @@ export default function JobDetailPage() {
                 const buy = parseFloat(finBuy) || 0;
                 const fuel = parseFloat(finFuel) || 0;
                 const extra = parseFloat(finExtra) || 0;
-                const profit = sell - buy - fuel - extra;
-                const margin = sell > 0 ? (profit / sell) * 100 : 0;
+                const gp = computeJobGpExVat({ ...job, buyPrice: buy, sellPrice: sell, fuelSurcharge: fuel, extraCharges: extra });
                 patchJob({
                   buyPrice: buy,
                   sellPrice: sell,
                   fuelSurcharge: fuel,
                   extraCharges: extra,
-                  profit,
-                  margin,
+                  profit: gp.profit,
+                  margin: gp.margin,
                 });
                 notifySuccess("Pricing saved", {
-                  description: `Profit £${profit.toFixed(2)} · margin ${margin.toFixed(1)}%`,
+                  description: `GP £${gp.profit.toFixed(2)} · margin ${gp.margin.toFixed(1)}% (vs customer net ex VAT)`,
                   href: platformPath(`/jobs/${id}`),
                 });
               }}
             >
               Save pricing
             </Btn>
-            <div className="text-sm text-gray-600">
-              Preview: profit <strong className="text-green-700">£{pricingPreview.profit.toFixed(2)}</strong> · margin{" "}
-              <strong>{pricingPreview.margin.toFixed(1)}%</strong>
-              <span className="ml-2 text-xs">(saved to job when you click Save pricing)</span>
+            <div className="space-y-1 text-sm text-gray-600">
+              <div>
+                Preview: GP <strong className="text-green-700">£{pricingPreview.profit.toFixed(2)}</strong> · margin{" "}
+                <strong>{pricingPreview.margin.toFixed(1)}%</strong>
+                <span className="ml-2 text-xs">(customer net ex VAT minus supplier cost — saved when you click Save pricing)</span>
+              </div>
+              {job.supplierInvoiceLines && job.supplierInvoiceLines.length > 0 ? (
+                <p className="text-xs text-amber-800">
+                  Supplier invoice lines are on file — GP uses their total as cost. Edit under{" "}
+                  <Link className="font-medium text-ht-slate underline" to={platformPath(`/supplier-invoicing?job=${job.id}`)}>
+                    Supplier invoicing
+                  </Link>
+                  .
+                </p>
+              ) : (
+                <p className="text-xs text-gray-500">
+                  <Link className="font-medium text-ht-slate underline" to={platformPath(`/supplier-invoicing?job=${job.id}`)}>
+                    Supplier invoicing
+                  </Link>{" "}
+                  — upload supplier documents, costs, and links to customer invoice refs.
+                </p>
+              )}
             </div>
           </div>
         </Card>

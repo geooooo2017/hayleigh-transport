@@ -1,9 +1,10 @@
 import { useMemo, useState } from "react";
 import { Link } from "react-router-dom";
-import { Download, Plus, Search, Trash2 } from "lucide-react";
-import { notifySuccess } from "../lib/platformNotify";
+import { AlertTriangle, Download, FlaskConical, Plus, Search, Trash2 } from "lucide-react";
+import { notifyError, notifySuccess } from "../lib/platformNotify";
 import { useAuth } from "../context/AuthContext";
 import { useJobRecycleBin, useJobs } from "../context/JobsContext";
+import { getSupabase } from "../lib/supabase";
 import { userCanDeleteJobs } from "../lib/permissions";
 import type { Job } from "../types";
 import { Btn, Card } from "../components/Layout";
@@ -11,6 +12,8 @@ import { prependBrandedCsvPreamble, type UserCompanyDetails } from "../lib/compa
 import { getUserCompanyDetails } from "../lib/userCompanyProfile";
 import { platformPath } from "../routes/paths";
 import { formatAddressSummary } from "../lib/jobAddress";
+import { jobHasDriverReportedIssue } from "../lib/jobBoardVisual";
+import { createSeededTestJob, TEST_JOB_DRIVER_PORTAL_REGISTRATION } from "../lib/seedTestJob";
 
 function csvCell(v: unknown): string {
   const s = String(v ?? "");
@@ -101,8 +104,9 @@ function exportCsv(rows: Job[], details: UserCompanyDetails, preparedBy: string 
 
 export default function JobsPage() {
   const { user } = useAuth();
-  const [jobs] = useJobs();
-  const { softDeleteJob } = useJobRecycleBin();
+  const [jobs, setJobs] = useJobs();
+  const [testJobBusy, setTestJobBusy] = useState(false);
+  const { softDeleteJob, deletedBin } = useJobRecycleBin();
   const canDeleteJob = userCanDeleteJobs(user);
   const [q, setQ] = useState("");
   const filtered = useMemo(() => {
@@ -129,7 +133,59 @@ export default function JobsPage() {
             className="h-9 w-full rounded-lg border border-ht-border bg-white py-2 pl-10 pr-3 text-sm outline-none focus:ring-2 focus:ring-ht-slate/20"
           />
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2">
+          <Btn
+            variant="outline"
+            className="h-9 gap-2 py-1.5 text-sm"
+            type="button"
+            disabled={!user || testJobBusy}
+            title={
+              !user
+                ? "Sign in to add a test job"
+                : `Insert a full test job (Manchester → Leeds). Driver portal: reg ${TEST_JOB_DRIVER_PORTAL_REGISTRATION} + new job number.`
+            }
+            onClick={() => {
+              if (!user) return;
+              setTestJobBusy(true);
+              void (async () => {
+                try {
+                  const job = await createSeededTestJob(user);
+                  const nextJobs = [...jobs, job];
+                  setJobs(nextJobs);
+                  const supabase = getSupabase();
+                  if (supabase) {
+                    const { error: upErr } = await supabase.from("jobs_list").upsert(
+                      {
+                        id: 1,
+                        jobs: nextJobs,
+                        deleted_jobs: deletedBin,
+                        updated_at: new Date().toISOString(),
+                      },
+                      { onConflict: "id" }
+                    );
+                    if (upErr) {
+                      notifyError("Test job added in app; cloud copy may be stale", {
+                        description: upErr.message,
+                      });
+                    }
+                  }
+                  notifySuccess(`Test job ${job.jobNumber} added`, {
+                    description: `Driver portal (/driver): registration ${TEST_JOB_DRIVER_PORTAL_REGISTRATION}, job number ${job.jobNumber} (exact match).`,
+                    href: platformPath(`/jobs/${job.id}`),
+                  });
+                } catch (e) {
+                  notifyError("Could not add test job", {
+                    description: e instanceof Error ? e.message : "Unknown error",
+                  });
+                } finally {
+                  setTestJobBusy(false);
+                }
+              })();
+            }}
+          >
+            <FlaskConical size={16} className={testJobBusy ? "animate-pulse" : undefined} aria-hidden />
+            {testJobBusy ? "Adding…" : "Test job"}
+          </Btn>
           <Btn
             variant="outline"
             className="h-9 gap-2 py-1.5 text-sm"
@@ -175,6 +231,9 @@ export default function JobsPage() {
                 <tr className="border-b border-gray-300 bg-gray-100">
                   <th className="sticky left-0 z-20 min-w-[100px] border-r border-gray-300 bg-gray-100 px-2 py-2.5 text-left text-xs font-semibold text-gray-700">
                     Job #
+                  </th>
+                  <th className="min-w-[40px] border-r border-gray-300 bg-gray-100 px-1 py-2.5 text-center text-xs font-semibold text-gray-700">
+                    Drv
                   </th>
                   <th className="min-w-[72px] border-r border-gray-300 px-2 py-2.5 text-left text-xs font-semibold text-gray-700">
                     Handler
@@ -274,6 +333,15 @@ export default function JobsPage() {
                         <Link to={platformPath(`/jobs/${d.id}`)} className="text-ht-slate hover:underline">
                           {d.jobNumber}
                         </Link>
+                      </td>
+                      <td className="border-r border-gray-200 px-1 py-2 text-center text-xs">
+                        {jobHasDriverReportedIssue(d) ? (
+                          <span title="Driver reported an issue" className="inline-flex text-red-600">
+                            <AlertTriangle className="h-4 w-4" aria-hidden />
+                          </span>
+                        ) : (
+                          <span className="text-gray-300">—</span>
+                        )}
                       </td>
                       <td className="border-r border-gray-200 px-2 py-2 text-xs text-gray-700">{d.handler}</td>
                       <td className="border-r border-gray-200 px-2 py-2 text-xs text-gray-700">
@@ -401,6 +469,7 @@ export default function JobsPage() {
                   <td className="sticky left-0 z-10 border-r border-gray-300 bg-gray-100 px-2 py-2.5 text-xs text-gray-700">
                     TOTAL ({filtered.length})
                   </td>
+                  <td className="border-r border-gray-300 bg-gray-100" />
                   <td colSpan={9} className="border-r border-gray-300" />
                   <td className="border-r border-gray-300 px-2 py-2.5 text-right font-mono text-xs">
                     £{filtered.reduce((s, j) => s + parseFloat(String(j.buyPrice || 0)), 0).toFixed(2)}

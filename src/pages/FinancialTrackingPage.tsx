@@ -91,7 +91,12 @@ export default function FinancialTrackingPage() {
             <Link className="font-medium text-ht-slate underline" to={platformPath("/jobs")}>
               Jobs
             </Link>
-            . Use <strong>Export CSV</strong> here when this table has rows to share a simple sheet with accounts.
+            . Use{" "}
+            <Link className="font-medium text-ht-slate underline" to={platformPath("/supplier-invoicing")}>
+              Supplier invoicing
+            </Link>{" "}
+            for supplier documents, linked customer refs, and GP. Use <strong>Export CSV</strong> here when this table has
+            rows to share a simple sheet with accounts.
           </p>
         </div>
       </Card>

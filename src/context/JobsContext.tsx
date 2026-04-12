@@ -11,9 +11,16 @@ import {
 } from "react";
 import type { DeletedJobEntry } from "../lib/deletedJobsBin";
 import { parseDeletedBin, purgeExpiredDeletedBin } from "../lib/deletedJobsBin";
+import { pendingDriverAllocationBellSig } from "../lib/driverAllocationActions";
+import {
+  driverReportedIssueSig,
+  formatDriverIssueBellDetail,
+} from "../lib/driverIssueCommon";
 import { migrateJobs } from "../lib/jobAddress";
 import { MOBILE_TEST_JOB_ID } from "../lib/mobileTrackingTestProject";
+import { recordActivityOnly } from "../lib/platformNotify";
 import { getSupabase } from "../lib/supabase";
+import { platformPath } from "../routes/paths";
 import type { Job } from "../types";
 
 const LOCAL_KEY_JOBS = "jobs";
@@ -94,6 +101,106 @@ export function JobsProvider({ children }: { children: React.ReactNode }) {
   const dirtyRef = useRef(false);
   const saveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const bootstrappedRef = useRef(false);
+  const driverIssueNotifyPrimedRef = useRef(false);
+  const driverIssueSeenSigRef = useRef<Map<number, string>>(new Map());
+  const driverAllocNotifyPrimedRef = useRef(false);
+  const driverAllocSeenSigRef = useRef<Map<number, string>>(new Map());
+
+  useEffect(() => {
+    if (supabase && cloudLoading) return;
+
+    const seedSeenFromJobs = (list: Job[]) => {
+      driverIssueSeenSigRef.current = new Map();
+      for (const j of list) {
+        const s = driverReportedIssueSig(j);
+        if (s) driverIssueSeenSigRef.current.set(j.id, s);
+      }
+    };
+
+    if (!driverIssueNotifyPrimedRef.current) {
+      if (supabase && cloudLoading) return;
+      if (supabase && jobs.length === 0) {
+        seedSeenFromJobs([]);
+        driverIssueNotifyPrimedRef.current = true;
+        return;
+      }
+      seedSeenFromJobs(jobs);
+      driverIssueNotifyPrimedRef.current = true;
+      return;
+    }
+
+    for (const j of jobs) {
+      const s = driverReportedIssueSig(j);
+      const was = driverIssueSeenSigRef.current.get(j.id);
+      if (s && s !== was) {
+        const detail = j.driverReportedIssue ? formatDriverIssueBellDetail(j.driverReportedIssue) : "";
+        recordActivityOnly(
+          `Driver alert · ${j.jobNumber}`,
+          detail,
+          platformPath(`/jobs/${j.id}`),
+          "warning"
+        );
+        driverIssueSeenSigRef.current.set(j.id, s);
+      }
+      if (!s && was !== undefined) {
+        driverIssueSeenSigRef.current.delete(j.id);
+      }
+    }
+    for (const id of [...driverIssueSeenSigRef.current.keys()]) {
+      if (!jobs.some((j) => j.id === id)) driverIssueSeenSigRef.current.delete(id);
+    }
+  }, [jobs, cloudLoading, supabase]);
+
+  useEffect(() => {
+    if (supabase && cloudLoading) return;
+
+    const seedAllocSeenFromJobs = (list: Job[]) => {
+      driverAllocSeenSigRef.current = new Map();
+      for (const j of list) {
+        const s = pendingDriverAllocationBellSig(j);
+        if (s) driverAllocSeenSigRef.current.set(j.id, s);
+      }
+    };
+
+    if (!driverAllocNotifyPrimedRef.current) {
+      if (supabase && jobs.length === 0) {
+        seedAllocSeenFromJobs([]);
+        driverAllocNotifyPrimedRef.current = true;
+        return;
+      }
+      seedAllocSeenFromJobs(jobs);
+      driverAllocNotifyPrimedRef.current = true;
+      return;
+    }
+
+    for (const j of jobs) {
+      const s = pendingDriverAllocationBellSig(j);
+      const was = driverAllocSeenSigRef.current.get(j.id);
+      if (s && s !== was) {
+        const p = j.pendingDriverAllocationRequest!;
+        const detail = [
+          `Vehicle ${p.vehicleReg} tried to sign in for live tracking.`,
+          p.driverName?.trim() ? `Name given: ${p.driverName.trim()}.` : null,
+          "Approve or dismiss in the pop-up or on the job.",
+        ]
+          .filter(Boolean)
+          .join(" ");
+        recordActivityOnly(
+          `Driver sign-in request · ${j.jobNumber}`,
+          detail,
+          platformPath(`/jobs/${j.id}`),
+          "warning"
+        );
+        driverAllocSeenSigRef.current.set(j.id, s);
+      }
+      if (!s && was !== undefined) {
+        driverAllocSeenSigRef.current.delete(j.id);
+      }
+    }
+    for (const id of [...driverAllocSeenSigRef.current.keys()]) {
+      if (!jobs.some((j) => j.id === id)) driverAllocSeenSigRef.current.delete(id);
+    }
+  }, [jobs, cloudLoading, supabase]);
 
   const persistCloud = useCallback(
     (nextJobs: Job[], nextBin: DeletedJobEntry[]) => {

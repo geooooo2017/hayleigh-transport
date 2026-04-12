@@ -8,6 +8,8 @@ import { Btn, Card } from "../components/Layout";
 import { mailtoOffice, OFFICE_ENQUIRIES_EMAIL } from "../lib/companyBrand";
 import { QUOTE_REQ, QUOTE_WHY } from "../lib/fieldRequirementCopy";
 import { looksLikeEmail } from "../lib/podMailto";
+import { readQuotationSettings } from "../lib/quotationSettings";
+import { appendQuotation, createQuotationFromPublicRequest } from "../lib/quotationStorage";
 
 type QuoteForm = {
   serviceType: string;
@@ -48,16 +50,10 @@ const empty: QuoteForm = {
 };
 
 export default function QuotePage() {
+  const [quoteSettings] = useState(() => readQuotationSettings());
   const [step, setStep] = useState(1);
   const [form, setForm] = useState<QuoteForm>(empty);
-  const [result, setResult] = useState<{
-    basePrice: number;
-    distance: number;
-    duration: string;
-    fuelSurcharge: number;
-    total: number;
-    quoteRef: string;
-  } | null>(null);
+  const [result, setResult] = useState<{ quotationNumber: string } | null>(null);
 
   const set = (k: keyof QuoteForm, v: string) => setForm((f) => ({ ...f, [k]: v }));
 
@@ -90,32 +86,43 @@ export default function QuotePage() {
     [form.companyName, form.customerName, form.customerEmail, form.customerPhone]
   );
 
-  const calc = () => {
+  const submitRequest = () => {
     if (!form.companyName.trim() || !form.customerName.trim() || !looksLikeEmail(form.customerEmail) || !form.customerPhone.trim()) {
       notifyError("Complete your contact details", {
-        description: "Company, contact name, a valid email, and phone are required to generate a quote reference.",
+        description: "Company, contact name, a valid email, and phone are required to log your request.",
       });
       return;
     }
-    const dist = Math.floor(Math.random() * 300) + 50;
-    const m = form.serviceType === "international" ? 1.5 : 0.85;
-    const v =
-      form.vehicleType === "artic" ? 1.5 : form.vehicleType === "rigid" ? 1.2 : 1;
-    const base = Math.round(dist * m * v * 100) / 100;
-    const fuel = Math.round(base * 0.12 * 100) / 100;
-    const total = Math.round((base + fuel) * 100) / 100;
-    const ref = `QT${Date.now().toString().slice(-6)}`;
-    setResult({
-      basePrice: base,
-      distance: dist,
-      duration: `${Math.floor(dist / 50)} - ${Math.ceil(dist / 40)} hours`,
-      fuelSurcharge: fuel,
-      total,
-      quoteRef: ref,
-    });
+    const settings = readQuotationSettings();
+    const q = createQuotationFromPublicRequest(
+      {
+        serviceType: form.serviceType,
+        collectionPostcode: form.collectionPostcode,
+        deliveryPostcode: form.deliveryPostcode,
+        collectionDate: form.collectionDate,
+        deliveryDate: form.deliveryDate,
+        vehicleType: form.vehicleType,
+        goodsType: form.goodsType,
+        weight: form.weight,
+        length: form.length,
+        width: form.width,
+        height: form.height,
+        specialRequirements: form.specialRequirements,
+        customerName: form.customerName,
+        customerEmail: form.customerEmail,
+        customerPhone: form.customerPhone,
+        companyName: form.companyName,
+      },
+      settings
+    );
+    appendQuotation(q);
+    setResult({ quotationNumber: q.quotationNumber });
     setStep(3);
-    notifySuccess(`Quote ${ref} generated`, {
-      description: `Indicative total £${total.toFixed(2)} (incl. fuel surcharge)`,
+    notifySuccess(`Request logged — ${q.quotationNumber}`, {
+      description:
+        settings.mode === "automatic"
+          ? "Indicative costs may be pre-filled for the office; you will not see prices until someone approves them."
+          : "Our office will build costs manually. You will not see prices until someone approves them.",
       href: "/quote",
     });
   };
@@ -140,6 +147,46 @@ export default function QuotePage() {
     setStep(2);
   };
 
+  if (quoteSettings.mode === "disabled") {
+    return (
+      <div className="min-h-screen bg-ht-canvas">
+        <div className="relative overflow-hidden bg-gradient-to-br from-ht-navy via-ht-navy-mid to-ht-slate py-16 text-white">
+          <div className="pointer-events-none absolute inset-0 bg-[linear-gradient(105deg,transparent_40%,rgba(217,119,6,0.08)_100%)]" />
+          <div className="relative mx-auto max-w-3xl px-6 text-center">
+            <div className="mb-6 flex justify-center">
+              <div className="rounded-lg border border-white/30 bg-white p-2 shadow-lg">
+                <CompanyLogo className="h-10 w-auto max-w-[200px] object-contain md:h-12" />
+              </div>
+            </div>
+            <h1 className="mb-4 text-3xl font-bold md:text-4xl">Request a quote</h1>
+            <p className="text-lg text-slate-300">
+              Online quoting is turned off. Please contact the transport office directly — we will still handle your enquiry in the usual way.
+            </p>
+            <p className="mt-6 text-sm text-slate-400">
+              <Link to="/login" className="font-medium text-white underline decoration-ht-amber/60 hover:decoration-white">
+                Staff — operations login
+              </Link>
+            </p>
+          </div>
+        </div>
+        <div className="mx-auto max-w-xl px-6 py-12">
+          <Card className="rounded-2xl p-8 text-center shadow-lg">
+            <p className="text-slate-700">
+              For haulage quotes and bookings, email{" "}
+              <a className="font-medium text-ht-slate underline" href={`mailto:${OFFICE_ENQUIRIES_EMAIL}`}>
+                {OFFICE_ENQUIRIES_EMAIL}
+              </a>{" "}
+              or call the number on our website. Firm prices are only issued after the office has reviewed your lane.
+            </p>
+            <Btn className="mt-6" onClick={() => window.location.assign(mailtoOffice("Transport quote enquiry", ""))}>
+              Email the office
+            </Btn>
+          </Card>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="min-h-screen bg-ht-canvas">
       <div className="relative overflow-hidden bg-gradient-to-br from-ht-navy via-ht-navy-mid to-ht-slate py-16 text-white">
@@ -153,11 +200,11 @@ export default function QuotePage() {
           <p className="text-xs font-semibold uppercase tracking-[0.2em] text-amber-400/90">Haulage quote</p>
           <h1 className="mb-4 mt-3 text-4xl font-bold md:text-5xl">Request a transport quote</h1>
           <p className="mb-8 text-lg text-slate-300 md:text-xl">
-            UK and international road freight — indicative pricing in minutes. Final rates confirmed by our transport
-            office.
+            UK and international road freight — your request is logged with a reference. Firm prices are only shared after our
+            office has reviewed and approved costs.
           </p>
           <div className="flex flex-wrap justify-center gap-6 text-sm text-slate-200 md:gap-10">
-            {["Clear pricing breakdown", "Suitable vehicle classes", "Email quote to our team", "Professional haulier"].map((t) => (
+            {["Structured enquiry form", "Suitable vehicle classes", "Email the office in one tap", "Professional haulier"].map((t) => (
               <div key={t} className="flex items-center gap-2">
                 <Check className="h-5 w-5 shrink-0 text-amber-400" />
                 <span>{t}</span>
@@ -188,7 +235,7 @@ export default function QuotePage() {
           {[
             { n: 1, l: "Journey Details" },
             { n: 2, l: "Your Details" },
-            { n: 3, l: "Your Quote" },
+            { n: 3, l: "Confirmation" },
           ].map((s, i) => (
             <div key={s.n} className="flex items-center gap-4">
               {i > 0 && <ChevronRight size={20} className="text-gray-400" />}
@@ -347,8 +394,8 @@ export default function QuotePage() {
                 <Btn variant="outline" className="flex-1" onClick={() => setStep(1)}>
                   Back
                 </Btn>
-                <Btn className="flex-1" onClick={() => calc()}>
-                  Get quote
+                <Btn className="flex-1" onClick={() => submitRequest()}>
+                  Submit request
                 </Btn>
               </div>
             </div>
@@ -361,29 +408,18 @@ export default function QuotePage() {
               <div className="mb-4 flex justify-center border-b border-ht-border pb-4">
                 <CompanyLogo className="h-12 w-auto max-w-[220px] object-contain" />
               </div>
-              <h2 className="text-2xl font-semibold text-ht-navy">Your quote</h2>
-              <p className="text-sm text-gray-500">Reference: {result.quoteRef}</p>
+              <h2 className="text-2xl font-semibold text-ht-navy">Request received</h2>
+              <p className="text-sm text-gray-500">Quotation reference: {result.quotationNumber}</p>
             </div>
             <div className="space-y-4 p-6">
-              <div className="flex justify-between text-gray-600">
-                <span>Distance (est.)</span>
-                <span className="font-medium text-gray-900">{result.distance} mi</span>
-              </div>
-              <div className="flex justify-between text-gray-600">
-                <span>Duration (est.)</span>
-                <span className="font-medium text-gray-900">{result.duration}</span>
-              </div>
-              <div className="flex justify-between text-gray-600">
-                <span>Base transport fee</span>
-                <span className="font-medium text-gray-900">£{result.basePrice.toFixed(2)}</span>
-              </div>
-              <div className="flex justify-between text-gray-600">
-                <span>Fuel surcharge</span>
-                <span className="font-medium text-gray-900">£{result.fuelSurcharge.toFixed(2)}</span>
-              </div>
-              <div className="flex justify-between border-t pt-4 text-lg font-semibold">
-                <span>Total (incl. surcharge)</span>
-                <span>£{result.total.toFixed(2)}</span>
+              <p className="text-sm leading-relaxed text-gray-700">
+                Thank you — your enquiry is saved on our system.{" "}
+                <strong>We do not show prices on this page.</strong> A member of the team will build or review costs; you will
+                only receive figures once a logged-in user has approved them. You may use the reference above in any follow-up.
+              </p>
+              <div className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-950">
+                Tip: operations staff can open <strong>Quotations</strong> after signing in to edit lines, approve prices, and
+                export a customer PDF.
               </div>
               <div className="flex flex-wrap gap-2">
                 <Btn
@@ -391,9 +427,8 @@ export default function QuotePage() {
                     const body = [
                       "Please follow up on this online quote request.",
                       "",
-                      `Quote reference: ${result.quoteRef}`,
-                      `Estimated total: £${result.total.toFixed(2)} (incl. fuel surcharge)`,
-                      `Distance (est.): ${result.distance} mi`,
+                      `Quotation reference: ${result.quotationNumber}`,
+                      "(No pricing on this email — awaiting office review and approval.)",
                       "",
                       "Contact",
                       `Name: ${form.customerName}`,
@@ -410,23 +445,22 @@ export default function QuotePage() {
                     ]
                       .filter(Boolean)
                       .join("\n");
-                    window.location.assign(mailtoOffice(`Quote enquiry ${result.quoteRef}`, body));
+                    window.location.assign(mailtoOffice(`Quote enquiry ${result.quotationNumber}`, body));
                     notifySuccess("Opening your email app", {
-                      description: `Send the message to ${OFFICE_ENQUIRIES_EMAIL} to submit your request.`,
+                      description: `Send the message to ${OFFICE_ENQUIRIES_EMAIL} to reach the office.`,
                       href: "/quote",
                     });
                   }}
                 >
-                  Submit request
+                  Email the office
                 </Btn>
                 <Btn
                   variant="outline"
                   onClick={() => {
                     const body = [
-                      "I would like to confirm a booking for the following estimate.",
+                      "I would like to discuss or confirm a booking following my online enquiry.",
                       "",
-                      `Quote reference: ${result.quoteRef}`,
-                      `Estimated total: £${result.total.toFixed(2)} (incl. fuel surcharge)`,
+                      `Quotation reference: ${result.quotationNumber}`,
                       "",
                       "Contact",
                       `Name: ${form.customerName}`,
@@ -434,14 +468,14 @@ export default function QuotePage() {
                       `Email: ${form.customerEmail}`,
                       `Phone: ${form.customerPhone}`,
                     ].join("\n");
-                    window.location.assign(mailtoOffice(`Booking enquiry ${result.quoteRef}`, body));
+                    window.location.assign(mailtoOffice(`Booking enquiry ${result.quotationNumber}`, body));
                     notifySuccess("Opening your email app", {
-                      description: `Send the message to ${OFFICE_ENQUIRIES_EMAIL} to confirm your booking.`,
+                      description: `Send the message to ${OFFICE_ENQUIRIES_EMAIL}.`,
                       href: "/quote",
                     });
                   }}
                 >
-                  Confirm booking
+                  Booking follow-up
                 </Btn>
               </div>
             </div>

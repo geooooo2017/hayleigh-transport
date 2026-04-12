@@ -1,7 +1,7 @@
 import { useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import { notifyError, notifyMessage, notifySuccess } from "../lib/platformNotify";
-import { AlertTriangle, Check, FileDown, Mail, Printer, RotateCcw, Send } from "lucide-react";
+import { AlertTriangle, Check, FileDown, GitCompare, Mail, Printer, RotateCcw, Send } from "lucide-react";
 import { useAuth } from "../context/AuthContext";
 import { useJobs } from "../context/JobsContext";
 import { WhyThisSection } from "../components/FormGuidance";
@@ -13,6 +13,7 @@ import { jobNetExVat } from "../lib/jobNetAmount";
 import { escapeHtml, printPaperwork } from "../lib/printPaperwork";
 import { platformPath } from "../routes/paths";
 import type { Job } from "../types";
+import { JobInvoiceCompareModal } from "../components/JobInvoiceCompareModal";
 
 type InvFilter = "need" | "sent" | "all";
 
@@ -33,6 +34,12 @@ export default function CustomerInvoicingPage() {
   const [jobs, setJobs] = useJobs();
   /** Default "all" so completed jobs already marked invoiced (e.g. MOBILE-TEST) are visible; use "need" to focus backlog. */
   const [invFilter, setInvFilter] = useState<InvFilter>("all");
+  const [compareJobId, setCompareJobId] = useState<number | null>(null);
+
+  const compareJob = useMemo(
+    () => (compareJobId != null ? jobs.find((j) => j.id === compareJobId) ?? null : null),
+    [jobs, compareJobId],
+  );
 
   const completedJobs = useMemo(() => {
     return jobs
@@ -260,12 +267,27 @@ export default function CustomerInvoicingPage() {
                     >
                       <FileDown size={14} aria-hidden /> PDF
                     </button>
+                    <button
+                      type="button"
+                      className="inline-flex items-center gap-1 rounded-md border border-ht-slate/30 bg-ht-slate/5 px-2 py-1 text-xs font-medium text-ht-navy hover:bg-ht-slate/10"
+                      onClick={() => setCompareJobId(j.id)}
+                      title="Compare customer and supplier totals and view both PDFs side by side"
+                    >
+                      <GitCompare size={14} aria-hidden /> Compare
+                    </button>
                   </div>
                 </td>
               </tr>
             ))}
           </tbody>
         </table>
+        <JobInvoiceCompareModal
+          job={compareJob}
+          open={compareJob != null}
+          onClose={() => setCompareJobId(null)}
+          userId={user?.id}
+          preparedBy={user?.name}
+        />
         {jobs.length === 0 && <p className="p-8 text-center text-gray-500">No jobs yet.</p>}
         {jobs.length > 0 && completedJobs.length === 0 && (
           <p className="p-8 text-center text-gray-500">No completed jobs — invoice tracking starts when jobs are marked completed.</p>

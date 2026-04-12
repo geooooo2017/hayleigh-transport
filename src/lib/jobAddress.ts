@@ -1,4 +1,6 @@
 import type { Job } from "../types";
+import { formatVehicleRegistrationDisplay } from "./driverPositionsApi";
+import { computeJobGpExVat } from "./jobProfit";
 
 export type AddressSide = "collection" | "delivery";
 
@@ -6,7 +8,7 @@ export type AddressSide = "collection" | "delivery";
 export function migrateJob(job: Job): Job {
   const leg = job as Job & { collectionLocation?: string; deliveryLocation?: string };
   const { collectionLocation: _c, deliveryLocation: _d, ...rest } = leg;
-  return {
+  const migrated: Job = {
     ...rest,
     collectionAddressLines:
       (rest.collectionAddressLines && String(rest.collectionAddressLines).trim()) ||
@@ -28,6 +30,16 @@ export function migrateJob(job: Job): Job {
     collectionRef: rest.collectionRef ?? "",
     customerInvoiceRef: rest.customerInvoiceRef ?? "",
     customerPaymentDate: rest.customerPaymentDate ?? "",
+    truckPlates: (() => {
+      const t = String(rest.truckPlates ?? "").trim();
+      return t ? formatVehicleRegistrationDisplay(t) : "";
+    })(),
+  };
+  const gp = computeJobGpExVat(migrated);
+  return {
+    ...migrated,
+    profit: gp.profit,
+    margin: gp.margin,
   };
 }
 
@@ -51,6 +63,30 @@ function street(job: Job, side: AddressSide): string {
 
 function pc(job: Job, side: AddressSide): string {
   return side === "collection" ? (job.collectionPostcode ?? "") : (job.deliveryPostcode ?? "");
+}
+
+/** Driver app: expected arrival at delivery (ISO string). */
+export function formatDriverDeliveryEtaDisplay(iso: string | undefined): string {
+  if (!iso?.trim()) return "";
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return iso.trim();
+  return d.toLocaleString("en-GB", {
+    weekday: "short",
+    day: "numeric",
+    month: "short",
+    year: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+  });
+}
+
+/** `datetime-local` value from stored ISO (local wall clock). */
+export function isoToDatetimeLocalValue(iso: string | undefined): string {
+  if (!iso?.trim()) return "";
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return "";
+  const pad = (n: number) => String(n).padStart(2, "0");
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
 }
 
 /** UK-style short date for job board / list cards (from YYYY-MM-DD or ISO). */

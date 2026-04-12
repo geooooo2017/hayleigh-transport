@@ -265,3 +265,14 @@ export async function downloadJobInvoicePdf(job: Job, issuer?: BookingPdfIssuer)
   const safe = job.jobNumber.replace(/[/\\?%*:|"<>]/g, "-");
   doc.save(`Invoice-${safe}.pdf`);
 }
+
+/** In-memory PDF for embedding (e.g. compare modal). Caller must call `revoke()` when done to free the blob URL. */
+export async function createJobInvoicePdfObjectUrl(
+  job: Job,
+  issuer?: BookingPdfIssuer,
+): Promise<{ url: string; revoke: () => void }> {
+  const doc = await buildJobInvoicePdf(job, issuer);
+  const blob = doc.output("blob");
+  const url = URL.createObjectURL(blob);
+  return { url, revoke: () => URL.revokeObjectURL(url) };
+}

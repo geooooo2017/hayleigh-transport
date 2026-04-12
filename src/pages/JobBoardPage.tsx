@@ -10,10 +10,10 @@ import {
 } from "@dnd-kit/core";
 import type { ReactNode } from "react";
 import { Link } from "react-router-dom";
-import { ClipboardList, Plus } from "lucide-react";
+import { AlertTriangle, ClipboardList, Plus } from "lucide-react";
 import { useLocalStorage } from "../hooks/useLocalStorage";
 import { formatJobCardDate } from "../lib/jobAddress";
-import { jobBoardHasIssues } from "../lib/jobBoardVisual";
+import { jobBoardHasIssues, jobHasDriverReportedIssue } from "../lib/jobBoardVisual";
 import { useJobs } from "../context/JobsContext";
 import type { Job } from "../types";
 import { Btn, Card } from "../components/Layout";
@@ -37,6 +37,10 @@ function jobBoardCardColors(job: Job): string {
   }
 }
 
+function jobBoardDriverAlertRing(job: Job): string {
+  return jobHasDriverReportedIssue(job) ? "ring-2 ring-red-600 ring-offset-2" : "";
+}
+
 function JobCard({ job, fromBasket }: { job: Job; fromBasket?: boolean }) {
   const { attributes, listeners, setNodeRef, transform, isDragging } = useDraggable({
     id: `job-${job.id}`,
@@ -55,13 +59,22 @@ function JobCard({ job, fromBasket }: { job: Job; fromBasket?: boolean }) {
       title={
         jobBoardHasIssues(job)
           ? "Issues: complete addresses, core job fields, and sell price (ex VAT) on the job page"
-          : undefined
+          : jobHasDriverReportedIssue(job)
+            ? "Driver reported an issue — open job for details"
+            : undefined
       }
-      className={`cursor-grab rounded-lg border-2 p-3 shadow-sm active:cursor-grabbing ${jobBoardCardColors(job)} ${
+      className={`cursor-grab rounded-lg border-2 p-3 shadow-sm active:cursor-grabbing ${jobBoardCardColors(job)} ${jobBoardDriverAlertRing(job)} ${
         isDragging ? "opacity-70 ring-2 ring-ht-slate" : ""
       } ${fromBasket ? "border-dashed" : ""}`}
     >
-      <div className="text-sm font-semibold text-ht-slate">{job.jobNumber}</div>
+      <div className="flex items-start justify-between gap-2">
+        <div className="text-sm font-semibold text-ht-slate">{job.jobNumber}</div>
+        {jobHasDriverReportedIssue(job) ? (
+          <span className="inline-flex shrink-0 items-center gap-0.5 rounded bg-red-600 px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wide text-white">
+            <AlertTriangle className="h-2.5 w-2.5" aria-hidden /> Alert
+          </span>
+        ) : null}
+      </div>
       <dl className="mt-1.5 space-y-0.5 text-[11px] leading-snug text-gray-700">
         <div className="flex justify-between gap-2">
           <dt className="shrink-0 text-gray-500">Customer job no.</dt>

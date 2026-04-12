@@ -13,7 +13,13 @@ export const JOB_MAP_WHY =
   "Postcodes anchor map pins, distance checks, and UK geocoding. Domestic jobs need full valid UK codes; international legs still need a code (any format, min. 2 characters) so coordinates can be stored consistently.";
 
 export const JOB_FINANCE_WHY =
-  "Buy, sell, fuel, and extras (all ex VAT) calculate GP and margin for every job. Without accurate figures, invoices, supplier payments, and management reports will be wrong.";
+  "Gross profit uses customer net ex VAT (sell + fuel + extras, or your invoiced-value override on the job) minus supplier cost. Cost is the sum of supplier invoice lines when you add them under Supplier Invoicing, otherwise the buy price. Margin is GP divided by that same customer value. Without accurate figures, invoices, supplier payments, and management reports will be wrong.";
+
+export const SUPPLIER_INVOICING_WHY =
+  "Upload supplier documents, enter net (ex VAT) amounts, and tie each line to your customer invoice reference so GP on the dashboard matches what you billed versus what haulage cost.";
+
+export const ONEDRIVE_BACKUP_WHY =
+  "PDF backups give accounts and directors a readable snapshot of jobs, CRM, fleet, financing terms, and support history. OneDrive upload uses your Microsoft account (Graph API) from this browser only — configure an Azure app registration and store nothing secret in the repo except the public client ID. Large binary blobs (e.g. POD data URLs) are summarised in text dumps, not re-embedded in every PDF.";
 
 export const BIBBY_FINANCE_WHY =
   "Invoice financing fees (prepayment, service fee, optional bad debt cover, and discount/interest on the advanced amount) reduce true net profit. Rates match your Bibby agreement — edit them under Settings. Service fee covers credit control; discount fee varies with how much you draw and how long invoices stay outstanding.";
@@ -65,6 +71,12 @@ export const QUOTE_REQ = {
   contactPhone: "Phone number if we need to clarify access or timing.",
 } as const;
 
+export const QUOTATIONS_WHY =
+  "Quotations are logged with a unique HT-Q- number. Nik, Scott, and other logged-in users edit cost lines and approve prices; customers only receive firm figures after that approval. Use automatic mode to pre-fill indicative lines from the rate card, manual mode to build every line yourself, or disabled to turn off the public form.";
+
+export const QUOTATION_SETTINGS_WHY =
+  "The rate card drives automatic suggestions only — it does not change customer-facing behaviour until someone approves. Tune £/mile, multipliers, and fuel % to match how you want the office to start pricing; switch to manual if you prefer empty quotes every time.";
+
 export const CUSTOMER_INVOICING_WHY =
   "Completed jobs must be invoiced and flagged so revenue is not forgotten and accounts can match payments to the right customer.";
 
@@ -80,8 +92,8 @@ export const REQ = {
   deliveryDate: "Delivery date sets expectations and invoicing timing.",
   carrier: "Carrier identifies who is paid and who holds the goods in transit.",
   truckPlates: "Vehicle registration must match the driver app and your job sheet.",
-  sellPrice: "Sell (ex VAT) is the amount you charge the customer — required for margin and invoices.",
-  buyPrice: "Buy (ex VAT) records supplier cost for GP; enter 0 only if not yet agreed.",
+  sellPrice: "Sell (ex VAT) is the core amount you charge the customer — with fuel and extras it forms customer net ex VAT for GP and invoices.",
+  buyPrice: "Buy (ex VAT) is supplier cost for GP when you have no supplier invoice lines; otherwise totals from Supplier invoicing replace it when you save lines.",
   routeType: "Domestic vs international affects VAT treatment and job numbering.",
   collectionAddress: "Collection site where goods are loaded — required for drivers and POD.",
   collectionContact: "Site phone is required for the driver. Contact name and email are optional.",

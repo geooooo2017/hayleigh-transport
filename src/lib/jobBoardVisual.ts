@@ -1,5 +1,8 @@
 import type { Job } from "../types";
+import { jobHasDriverReportedIssue } from "./driverIssueCommon";
 import { isJobAddressComplete } from "./jobAddressValidation";
+
+export { jobHasDriverReportedIssue } from "./driverIssueCommon";
 
 /** Incomplete address, core job fields, or sell price — same rule as the job board red cards. */
 export function jobBoardHasIssues(job: Job): boolean {
@@ -15,6 +18,11 @@ export function jobBoardHasIssues(job: Job): boolean {
   }
   if (!(Number(job.sellPrice) > 0)) return true;
   return false;
+}
+
+/** Data issues OR driver-reported incident (map + job cards use red emphasis). */
+export function jobBoardOrMapNeedsIssueHighlight(job: Job): boolean {
+  return jobBoardHasIssues(job) || jobHasDriverReportedIssue(job);
 }
 
 /** Hex colours aligned with job board cards (FleetMap, exports, etc.). */

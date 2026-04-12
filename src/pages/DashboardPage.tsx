@@ -1,16 +1,25 @@
 import { useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
-import { ClipboardList, MapPin, Plus, Truck, Users } from "lucide-react";
+import { AlertTriangle, ClipboardList, FileText, MapPin, Plus, TrendingUp, Truck, Users } from "lucide-react";
 import { useLocalStorage } from "../hooks/useLocalStorage";
 import { useJobs } from "../context/JobsContext";
-import type { Customer, Driver, Job, Vehicle } from "../types";
+import type { Customer, Driver, Job, Quotation, Vehicle } from "../types";
 import { useCustomerArrivalEtaAlerts } from "../hooks/useCustomerArrivalEtaAlerts";
 import { formatAddressSummary } from "../lib/jobAddress";
-import { fetchDriverPositionsForMap } from "../lib/driverPositionsApi";
+import { jobHasDriverReportedIssue } from "../lib/jobBoardVisual";
+import {
+  fetchDriverPositionsForMap,
+  OFFICE_DRIVER_POSITIONS_POLL_MS,
+  officeDriverPositionsPollDescription,
+} from "../lib/driverPositionsApi";
 import { FleetMap, type FleetDriverPin } from "../components/FleetMap";
+import { DashboardSupplierInvoiceMatch } from "../components/DashboardSupplierInvoiceMatch";
 import { useFleetDrivingRoutes } from "../hooks/useFleetDrivingRoutes";
 import { Btn, Card } from "../components/Layout";
 import { platformPath } from "../routes/paths";
+import { computeJobGpExVat, effectiveSupplierCostExVat } from "../lib/jobProfit";
+import { resolveInvoiceValueExVat } from "../lib/jobNetAmount";
+import { QUOTATIONS_STORAGE_KEY, quotationNetExVat } from "../lib/quotationStorage";
 
 function statusRank(s: Job["status"]): number {
   if (s === "in-progress") return 0;
@@ -22,6 +31,7 @@ export default function DashboardPage() {
   const [customers] = useLocalStorage<Customer[]>("customers", []);
   const [drivers] = useLocalStorage<Driver[]>("drivers", []);
   const [vehicles] = useLocalStorage<Vehicle[]>("vehicles", []);
+  const [quotations] = useLocalStorage<Quotation[]>(QUOTATIONS_STORAGE_KEY, []);
   const [jobs, setJobs] = useJobs();
   const [driverPins, setDriverPins] = useState<FleetDriverPin[]>([]);
 
@@ -31,8 +41,16 @@ export default function DashboardPage() {
   const completed = jobs.filter((j) => j.status === "completed");
   const scheduled = jobs.filter((j) => j.status === "scheduled");
   const inProgress = jobs.filter((j) => j.status === "in-progress");
-  const revenueToday = jobsToday.reduce((s, j) => s + (Number(j.sellPrice) || 0), 0);
-  const revenueTotal = jobs.reduce((s, j) => s + (Number(j.sellPrice) || 0), 0);
+  const revenueToday = jobsToday.reduce((s, j) => s + resolveInvoiceValueExVat(j), 0);
+  const revenueTotal = jobs.reduce((s, j) => s + resolveInvoiceValueExVat(j), 0);
+  const sellExToday = jobsToday.reduce((s, j) => s + (Number(j.sellPrice) || 0), 0);
+  const sellExTotal = jobs.reduce((s, j) => s + (Number(j.sellPrice) || 0), 0);
+  const buyExToday = jobsToday.reduce((s, j) => s + effectiveSupplierCostExVat(j), 0);
+  const buyExTotal = jobs.reduce((s, j) => s + effectiveSupplierCostExVat(j), 0);
+  const gpTotal = jobs.reduce((s, j) => s + computeJobGpExVat(j).profit, 0);
+  const gpCompleted = completed.reduce((s, j) => s + computeJobGpExVat(j).profit, 0);
+  const quotationsApproved = quotations.filter((q) => q.pricesApproved);
+  const quotationsValueExVat = quotationsApproved.reduce((s, q) => s + quotationNetExVat(q), 0);
 
   const sortedJobs = useMemo(() => {
     return [...jobs].sort((a, b) => {
@@ -48,7 +66,7 @@ export default function DashboardPage() {
   useEffect(() => {
     const tick = () => void fetchDriverPositionsForMap().then(setDriverPins);
     tick();
-    const id = setInterval(tick, 8000);
+    const id = setInterval(tick, OFFICE_DRIVER_POSITIONS_POLL_MS);
     return () => clearInterval(id);
   }, []);
 
@@ -61,7 +79,7 @@ export default function DashboardPage() {
         <h1 className="text-2xl font-semibold text-ht-navy lg:text-3xl">Operations dashboard</h1>
         <p className="mt-1 text-sm text-slate-600 lg:text-base">
           Control tower for transport: every job in one list, live map positions for work in progress, and driver GPS when
-          available. Updates about every 8 seconds.
+          available. Driver positions on the map refresh about every {officeDriverPositionsPollDescription()}.
         </p>
       </div>
 
@@ -145,7 +163,7 @@ export default function DashboardPage() {
 
       {!empty && (
         <>
-          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3 lg:gap-6">
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4 xl:gap-6">
             <Card>
               <div className="flex flex-row items-center justify-between border-b border-ht-border px-6 pb-2 pt-6">
                 <h2 className="text-sm font-medium text-slate-600">Jobs Today</h2>
@@ -171,7 +189,7 @@ export default function DashboardPage() {
             </Card>
             <Card>
               <div className="flex flex-row items-center justify-between border-b border-ht-border px-6 pb-2 pt-6">
-                <h2 className="text-sm font-medium text-slate-600">Revenue</h2>
+                <h2 className="text-sm font-medium text-slate-600">Customer net (ex VAT)</h2>
                 <span className="text-[#10B981]" aria-hidden>
                   £
                 </span>
@@ -180,17 +198,66 @@ export default function DashboardPage() {
                 <div className="mb-4 text-3xl font-semibold text-gray-900">£{revenueToday.toFixed(2)}</div>
                 <div className="space-y-2">
                   <div className="flex items-center justify-between">
-                    <span className="text-sm text-gray-600">Today</span>
+                    <span className="text-sm text-gray-600">Today (jobs today)</span>
                     <span className="text-sm font-medium">£{revenueToday.toFixed(2)}</span>
                   </div>
                   <div className="flex items-center justify-between">
-                    <span className="text-sm text-gray-600">Total</span>
+                    <span className="text-sm text-gray-600">All jobs total</span>
                     <span className="text-sm font-medium">£{revenueTotal.toFixed(2)}</span>
                   </div>
-                  <div className="flex items-center justify-between">
-                    <span className="text-sm text-gray-600">Total Jobs</span>
-                    <span className="text-sm font-medium">{jobs.length}</span>
+                  <div className="border-t border-ht-border/80 pt-2">
+                    <p className="mb-1 text-xs font-medium text-gray-500">Sell (ex VAT)</p>
+                    <div className="flex items-center justify-between text-sm">
+                      <span className="text-gray-600">Today</span>
+                      <span className="font-mono font-medium">£{sellExToday.toFixed(2)}</span>
+                    </div>
+                    <div className="flex items-center justify-between text-sm">
+                      <span className="text-gray-600">All jobs</span>
+                      <span className="font-mono font-medium">£{sellExTotal.toFixed(2)}</span>
+                    </div>
                   </div>
+                  <div className="border-t border-ht-border/80 pt-2">
+                    <p className="mb-1 text-xs font-medium text-gray-500">Buy (ex VAT)</p>
+                    <div className="flex items-center justify-between text-sm">
+                      <span className="text-gray-600">Today</span>
+                      <span className="font-mono font-medium">£{buyExToday.toFixed(2)}</span>
+                    </div>
+                    <div className="flex items-center justify-between text-sm">
+                      <span className="text-gray-600">All jobs</span>
+                      <span className="font-mono font-medium">£{buyExTotal.toFixed(2)}</span>
+                    </div>
+                    <p className="mt-1 text-xs text-gray-500">Buy = supplier invoice lines total or job buy price.</p>
+                  </div>
+                  <p className="text-xs text-gray-500">Net = sell + fuel + extras, or invoiced-value override per job.</p>
+                </div>
+              </div>
+            </Card>
+            <Card>
+              <div className="flex flex-row items-center justify-between border-b border-ht-border px-6 pb-2 pt-6">
+                <h2 className="text-sm font-medium text-slate-600">Gross profit (ex VAT)</h2>
+                <TrendingUp className="text-ht-slate" size={20} aria-hidden />
+              </div>
+              <div className="px-6 pb-6 pt-2">
+                <div
+                  className={`mb-4 text-3xl font-semibold ${gpTotal < 0 ? "text-red-600" : "text-gray-900"}`}
+                >
+                  £{gpTotal.toFixed(2)}
+                </div>
+                <div className="space-y-2">
+                  <div className="flex items-center justify-between">
+                    <span className="text-sm text-gray-600">All jobs</span>
+                    <span className="text-sm font-medium">£{gpTotal.toFixed(2)}</span>
+                  </div>
+                  <div className="flex items-center justify-between">
+                    <span className="text-sm text-gray-600">Completed only</span>
+                    <span className="text-sm font-medium">£{gpCompleted.toFixed(2)}</span>
+                  </div>
+                  <Link
+                    to={platformPath("/supplier-invoicing")}
+                    className="inline-block text-xs font-medium text-ht-slate underline"
+                  >
+                    Supplier invoicing
+                  </Link>
                 </div>
               </div>
             </Card>
@@ -216,6 +283,39 @@ export default function DashboardPage() {
             </Card>
           </div>
 
+          <Card>
+            <div className="flex flex-col gap-3 border-b border-ht-border px-6 pb-2 pt-6 sm:flex-row sm:items-center sm:justify-between">
+              <div>
+                <h2 className="text-sm font-medium text-slate-600">Quotations</h2>
+                <p className="mt-1 text-xs text-slate-500">
+                  Website and office quotes — values below are approved net (ex VAT) only.
+                </p>
+              </div>
+              <Link to={platformPath("/quotations")} className="shrink-0">
+                <Btn variant="outline" className="gap-2 text-sm">
+                  <FileText size={16} aria-hidden />
+                  Open quotations
+                </Btn>
+              </Link>
+            </div>
+            <div className="grid grid-cols-1 gap-4 px-6 pb-6 pt-4 sm:grid-cols-3">
+              <div>
+                <div className="text-2xl font-semibold text-gray-900">{quotations.length}</div>
+                <div className="text-sm text-gray-600">Logged</div>
+              </div>
+              <div>
+                <div className="text-2xl font-semibold text-gray-900">{quotationsApproved.length}</div>
+                <div className="text-sm text-gray-600">Approved (priced)</div>
+              </div>
+              <div>
+                <div className="text-2xl font-semibold text-gray-900">£{quotationsValueExVat.toFixed(2)}</div>
+                <div className="text-sm text-gray-600">Approved total ex VAT</div>
+              </div>
+            </div>
+          </Card>
+
+          {jobs.length > 0 && <DashboardSupplierInvoiceMatch jobs={jobs} />}
+
           {jobs.length > 0 && (
             <>
               <Card className="overflow-hidden p-0">
@@ -239,7 +339,7 @@ export default function DashboardPage() {
                   </Link>
                 </div>
                 <div className="px-3 pb-3 pt-0 sm:px-4">
-                  <FleetMap jobs={jobs} driverPins={driverPins} fleetRoutes={fleetRoutes} />
+                  <FleetMap jobs={jobs} driverPins={driverPins} fleetRoutes={fleetRoutes} fleetVehicles={vehicles} />
                 </div>
               </Card>
 
@@ -267,7 +367,7 @@ export default function DashboardPage() {
                   </div>
                 </div>
                 <div className="overflow-x-auto p-6 pt-4">
-                  <table className="w-full min-w-[920px]">
+                  <table className="w-full min-w-[1240px]">
                     <thead>
                       <tr className="border-b border-ht-border">
                         <th className="px-3 py-3 text-left text-sm font-medium text-gray-600">Job</th>
@@ -278,18 +378,36 @@ export default function DashboardPage() {
                         <th className="px-3 py-3 text-left text-sm font-medium text-gray-600">Delivery</th>
                         <th className="px-3 py-3 text-left text-sm font-medium text-gray-600">Coll. date</th>
                         <th className="px-3 py-3 text-left text-sm font-medium text-gray-600">Status</th>
+                        <th className="px-3 py-3 text-right text-sm font-medium text-gray-600">Sell ex VAT</th>
+                        <th className="px-3 py-3 text-right text-sm font-medium text-gray-600">Buy ex VAT</th>
+                        <th className="px-3 py-3 text-right text-sm font-medium text-gray-600">Net ex VAT</th>
+                        <th className="px-3 py-3 text-right text-sm font-medium text-gray-600">GP</th>
                       </tr>
                     </thead>
                     <tbody>
-                      {sortedJobs.map((p) => (
+                      {sortedJobs.map((p) => {
+                        const sellEx = Number(p.sellPrice) || 0;
+                        const net = resolveInvoiceValueExVat(p);
+                        const sc = effectiveSupplierCostExVat(p);
+                        const gpv = computeJobGpExVat(p).profit;
+                        const gpCls =
+                          gpv < 0 ? "text-red-600" : gpv < 50 ? "text-orange-600" : "text-green-700";
+                        return (
                         <tr key={p.id} className="border-b border-ht-border/60 hover:bg-ht-canvas">
                           <td className="px-3 py-3 text-sm font-medium">
-                            <Link
-                              to={platformPath(`/jobs/${p.id}`)}
-                              className="text-ht-slate hover:underline"
-                            >
-                              {p.jobNumber}
-                            </Link>
+                            <div className="flex items-center gap-1.5">
+                              <Link
+                                to={platformPath(`/jobs/${p.id}`)}
+                                className="text-ht-slate hover:underline"
+                              >
+                                {p.jobNumber}
+                              </Link>
+                              {jobHasDriverReportedIssue(p) ? (
+                                <span title="Driver reported an issue" className="text-red-600">
+                                  <AlertTriangle className="h-4 w-4" aria-hidden />
+                                </span>
+                              ) : null}
+                            </div>
                           </td>
                           <td className="max-w-[140px] truncate px-3 py-3 text-sm text-gray-700" title={p.customerName}>
                             {p.customerName}
@@ -328,8 +446,21 @@ export default function DashboardPage() {
                                   : "Completed"}
                             </span>
                           </td>
+                          <td className="whitespace-nowrap px-3 py-3 text-right font-mono text-sm text-gray-800">
+                            £{sellEx.toFixed(2)}
+                          </td>
+                          <td className="whitespace-nowrap px-3 py-3 text-right font-mono text-sm text-gray-800">
+                            £{sc.toFixed(2)}
+                          </td>
+                          <td className="whitespace-nowrap px-3 py-3 text-right font-mono text-sm text-gray-800">
+                            £{net.toFixed(2)}
+                          </td>
+                          <td className={`whitespace-nowrap px-3 py-3 text-right font-mono text-sm font-semibold ${gpCls}`}>
+                            £{gpv.toFixed(2)}
+                          </td>
                         </tr>
-                      ))}
+                        );
+                      })}
                     </tbody>
                   </table>
                 </div>
