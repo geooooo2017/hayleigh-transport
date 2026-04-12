@@ -51,6 +51,7 @@ import {
 } from "../lib/jobAddressValidation";
 import {
   JOB_ADDRESS_WHY,
+  JOB_INVOICE_BILLING_WHY,
   JOB_CARRIER_WHY,
   JOB_FINANCE_WHY,
   JOB_MAP_WHY,
@@ -130,6 +131,11 @@ export default function JobDetailPage() {
   const [dContactName, setDContactName] = useState("");
   const [dContactPhone, setDContactPhone] = useState("");
   const [dContactEmail, setDContactEmail] = useState("");
+  const [ibOrg, setIbOrg] = useState("");
+  const [ibLine1, setIbLine1] = useState("");
+  const [ibLine2, setIbLine2] = useState("");
+  const [ibTown, setIbTown] = useState("");
+  const [invoiceBillingPostcode, setInvoiceBillingPostcode] = useState("");
   const [customerEmail, setCustomerEmail] = useState("");
   const [coreInvoiceSent, setCoreInvoiceSent] = useState<"yes" | "no">("no");
   const [sheetBillable, setSheetBillable] = useState<"yes" | "no">("no");
@@ -154,6 +160,10 @@ export default function JobDetailPage() {
     () => joinStructuredAddressLines({ organisation: dOrg, line1: dLine1, line2: dLine2, town: dTown }),
     [dOrg, dLine1, dLine2, dTown]
   );
+  const ibAddrLines = useMemo(
+    () => joinStructuredAddressLines({ organisation: ibOrg, line1: ibLine1, line2: ibLine2, town: ibTown }),
+    [ibOrg, ibLine1, ibLine2, ibTown]
+  );
 
   const onCollectionPlace = useCallback((p: PlaceResolvedPayload) => {
     setCOrg(p.organisation);
@@ -169,6 +179,14 @@ export default function JobDetailPage() {
     setDLine2(p.line2);
     setDTown(p.town);
     if (p.postcode.trim()) setDeliveryPostcode(p.postcode.trim().toUpperCase());
+  }, []);
+
+  const onInvoiceBillingPlace = useCallback((p: PlaceResolvedPayload) => {
+    setIbOrg(p.organisation);
+    setIbLine1(p.line1);
+    setIbLine2(p.line2);
+    setIbTown(p.town);
+    if (p.postcode.trim()) setInvoiceBillingPostcode(p.postcode.trim().toUpperCase());
   }, []);
 
   const validatePostcodesOrToast = () => {
@@ -252,6 +270,12 @@ export default function JobDetailPage() {
     setDContactName(job.deliveryContactName);
     setDContactPhone(job.deliveryContactPhone);
     setDContactEmail(job.deliveryContactEmail);
+    const ibp = splitSavedAddressLines(job.invoiceBillingAddressLines ?? "");
+    setIbOrg(ibp.organisation);
+    setIbLine1(ibp.line1);
+    setIbLine2(ibp.line2);
+    setIbTown(ibp.town);
+    setInvoiceBillingPostcode(job.invoiceBillingPostcode ?? "");
     oversizedPodRef.current = null;
     setSessionLargePodName(null);
   }, [job?.id]);
@@ -427,7 +451,17 @@ export default function JobDetailPage() {
     deliveryContactPhone: dContactPhone,
     deliveryContactEmail: dContactEmail,
     deliveryPostcode: deliveryPostcode.trim() || undefined,
+    invoiceBillingAddressLines: ibAddrLines.trim() || undefined,
+    invoiceBillingPostcode: invoiceBillingPostcode.trim() || undefined,
   });
+
+  const saveInvoiceBillingDetails = () => {
+    patchJob({
+      invoiceBillingAddressLines: ibAddrLines.trim() || undefined,
+      invoiceBillingPostcode: invoiceBillingPostcode.trim() || undefined,
+    });
+    notifySuccess("Invoice billing address saved", { href: platformPath(`/jobs/${id}`) });
+  };
 
   const saveCollectionDetails = () => {
     const draft = {
@@ -1150,6 +1184,46 @@ export default function JobDetailPage() {
               </div>
               <Btn type="button" variant="outline" className="text-sm" onClick={saveDeliveryDetails}>
                 Save delivery details
+              </Btn>
+            </div>
+            <div className="lg:col-span-2 space-y-3 rounded-lg border border-indigo-200/80 bg-indigo-50/25 p-4">
+              <WhyThisSection>{JOB_INVOICE_BILLING_WHY}</WhyThisSection>
+              <p className="text-xs text-gray-600">
+                Optional. Customer sales invoice PDF shows this in <strong>Invoice billing address</strong> when set;
+                otherwise that block matches delivery. Collection and delivery always print in full below it on the PDF.
+              </p>
+              <StructuredSiteAddressFields
+                title="Invoice billing (accounts / head office)"
+                titleClassName="text-sm font-semibold text-indigo-950"
+                wrapperClassName="space-y-3"
+                routeType={coreRouteType}
+                googleMapsApiKey={GOOGLE_MAPS_KEY}
+                organisation={ibOrg}
+                line1={ibLine1}
+                line2={ibLine2}
+                town={ibTown}
+                onOrganisationChange={setIbOrg}
+                onLine1Change={setIbLine1}
+                onLine2Change={setIbLine2}
+                onTownChange={setIbTown}
+                onPlaceResolved={onInvoiceBillingPlace}
+                showAddressRequiredStar={false}
+                addressRequiredWhy={REQ.collectionAddress}
+              />
+              <div>
+                <label className="mb-1 block text-xs font-medium text-gray-600">
+                  Billing postcode
+                  <span className="ml-1 font-normal text-gray-500">(optional)</span>
+                </label>
+                <input
+                  value={invoiceBillingPostcode}
+                  onChange={(e) => setInvoiceBillingPostcode(e.target.value)}
+                  className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm uppercase"
+                  placeholder="If different from delivery"
+                />
+              </div>
+              <Btn type="button" variant="outline" className="text-sm" onClick={saveInvoiceBillingDetails}>
+                Save invoice billing address
               </Btn>
             </div>
           </div>

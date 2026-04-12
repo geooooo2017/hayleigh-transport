@@ -1,7 +1,7 @@
 import { jsPDF } from "jspdf";
 import type { Job } from "../types";
 import { COMPANY_LEGAL_NAME, LOGO_PATH } from "./companyBrand";
-import { formatAddressBlock } from "./jobAddress";
+import { formatAddressBlock, formatInvoiceBillingBlock } from "./jobAddress";
 import { jobNetExVat } from "./jobNetAmount";
 import type { BookingPdfIssuer } from "./jobBookingPdf";
 import { defaultExportCompanyDetails, type UserCompanyDetails } from "./userCompanyProfile";
@@ -155,7 +155,7 @@ export async function buildJobInvoicePdf(job: Job, issuer?: BookingPdfIssuer): P
   doc.text(`Job reference: ${job.jobNumber}`, MARGIN, y);
   y += 8;
 
-  y = nextPageIfNeeded(doc, y, 40);
+  y = nextPageIfNeeded(doc, y, 36);
   doc.setFont("helvetica", "bold");
   doc.setFontSize(11);
   doc.text("Bill to", MARGIN, y);
@@ -168,13 +168,29 @@ export async function buildJobInvoicePdf(job: Job, issuer?: BookingPdfIssuer): P
     doc.text(job.customerEmail.trim(), MARGIN, y);
     y += LINE_MM;
   }
-  const billAddr = formatAddressBlock(job, "delivery");
-  if (billAddr && billAddr !== "—") {
-    const addrLines = doc.splitTextToSize(`Delivery site:\n${billAddr}`, MAX_TEXT_W * 0.85);
-    doc.text(addrLines, MARGIN, y);
-    y += addrLines.length * LINE_MM + 2;
+  y += 3;
+
+  const explicitBilling = formatInvoiceBillingBlock(job);
+  const billingBody = explicitBilling || formatAddressBlock(job, "delivery");
+  y = addPdfAddressSection(doc, y, "Invoice billing address", billingBody);
+  if (!explicitBilling && billingBody && billingBody !== "—") {
+    doc.setFont("helvetica", "italic");
+    doc.setFontSize(8);
+    doc.setTextColor(100);
+    const hint = doc.splitTextToSize(
+      "No separate billing address on file — showing delivery site. Add Invoice billing on the job to change this block.",
+      MAX_TEXT_W * 0.9,
+    );
+    y = nextPageIfNeeded(doc, y, hint.length * 3.6);
+    doc.text(hint, MARGIN, y);
+    y += hint.length * 3.6 + 4;
+    doc.setFont("helvetica", "normal");
+    doc.setTextColor(0);
   }
-  y += 4;
+
+  y = addPdfAddressSection(doc, y, "Collection", formatAddressBlock(job, "collection"));
+  y = addPdfAddressSection(doc, y, "Delivery", formatAddressBlock(job, "delivery"));
+  y += 2;
 
   y = nextPageIfNeeded(doc, y, 50);
   doc.setFont("helvetica", "bold");
@@ -245,6 +261,24 @@ function addParagraphSmall(doc: jsPDF, text: string, y: number): number {
   y = nextPageIfNeeded(doc, y, lines.length * LINE_MM);
   doc.text(lines, MARGIN, y);
   return y + lines.length * LINE_MM + 2;
+}
+
+function addPdfAddressSection(doc: jsPDF, y: number, title: string, body: string): number {
+  const trimmed = body.trim();
+  if (!trimmed || trimmed === "—") return y;
+  y = nextPageIfNeeded(doc, y, 28);
+  doc.setFont("helvetica", "bold");
+  doc.setFontSize(10);
+  doc.setTextColor(0);
+  doc.text(title, MARGIN, y);
+  y += 6;
+  doc.setFont("helvetica", "normal");
+  doc.setFontSize(9);
+  const lines = doc.splitTextToSize(trimmed, MAX_TEXT_W * 0.9);
+  y = nextPageIfNeeded(doc, y, lines.length * LINE_MM + 2);
+  doc.text(lines, MARGIN, y);
+  y += lines.length * LINE_MM + 5;
+  return y;
 }
 
 export async function downloadJobInvoicePdf(job: Job, issuer?: BookingPdfIssuer): Promise<void> {

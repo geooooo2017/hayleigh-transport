@@ -96,6 +96,12 @@ export type Job = {
   /** Postcode / postal code (validated in UI: mandatory; domestic = full UK format). */
   collectionPostcode?: string;
   deliveryPostcode?: string;
+  /**
+   * Multiline address for sales invoices / accounts (may differ from collection and delivery sites).
+   * If empty, the invoice PDF uses the delivery site as the billing address block.
+   */
+  invoiceBillingAddressLines?: string;
+  invoiceBillingPostcode?: string;
   /** From postcode or address geocoding for Live Tracking map. */
   collectionLat?: number;
   collectionLng?: number;

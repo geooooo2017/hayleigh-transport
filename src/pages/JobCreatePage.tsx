@@ -13,6 +13,7 @@ import {
   JOB_GENERAL_WHY,
   JOB_CARRIER_WHY,
   JOB_ADDRESS_WHY,
+  JOB_INVOICE_BILLING_WHY,
   JOB_FINANCE_WHY,
   JOB_REGISTER_WHY,
   JOB_NOTES_WHY,
@@ -65,6 +66,11 @@ export default function JobCreatePage() {
   const [deliveryContactPhone, setDeliveryContactPhone] = useState("");
   const [deliveryContactEmail, setDeliveryContactEmail] = useState("");
   const [deliveryPostcode, setDeliveryPostcode] = useState("");
+  const [ibOrg, setIbOrg] = useState("");
+  const [ibLine1, setIbLine1] = useState("");
+  const [ibLine2, setIbLine2] = useState("");
+  const [ibTown, setIbTown] = useState("");
+  const [invoiceBillingPostcode, setInvoiceBillingPostcode] = useState("");
   const [buyPrice, setBuyPrice] = useState("");
   const [sellPrice, setSellPrice] = useState("");
   const [fuelSurcharge, setFuelSurcharge] = useState("0");
@@ -93,6 +99,10 @@ export default function JobCreatePage() {
   const deliveryAddressLines = useMemo(
     () => joinStructuredAddressLines({ organisation: dOrg, line1: dLine1, line2: dLine2, town: dTown }),
     [dOrg, dLine1, dLine2, dTown]
+  );
+  const invoiceBillingAddressLines = useMemo(
+    () => joinStructuredAddressLines({ organisation: ibOrg, line1: ibLine1, line2: ibLine2, town: ibTown }),
+    [ibOrg, ibLine1, ibLine2, ibTown]
   );
 
   useEffect(() => {
@@ -133,6 +143,14 @@ export default function JobCreatePage() {
     setDLine2(p.line2);
     setDTown(p.town);
     if (p.postcode.trim()) setDeliveryPostcode(p.postcode.trim().toUpperCase());
+  }, []);
+
+  const onInvoiceBillingPlace = useCallback((p: PlaceResolvedPayload) => {
+    setIbOrg(p.organisation);
+    setIbLine1(p.line1);
+    setIbLine2(p.line2);
+    setIbTown(p.town);
+    if (p.postcode.trim()) setInvoiceBillingPostcode(p.postcode.trim().toUpperCase());
   }, []);
 
   const buy = parseFloat(buyPrice) || 0;
@@ -300,6 +318,12 @@ export default function JobCreatePage() {
       deliveryContactEmail: deliveryContactEmail.trim(),
       collectionPostcode: cPc || undefined,
       deliveryPostcode: dPc || undefined,
+      ...(invoiceBillingAddressLines.trim() || invoiceBillingPostcode.trim()
+        ? {
+            invoiceBillingAddressLines: invoiceBillingAddressLines.trim(),
+            invoiceBillingPostcode: invoiceBillingPostcode.trim() || undefined,
+          }
+        : {}),
       collectionLat,
       collectionLng,
       deliveryLat,
@@ -684,6 +708,47 @@ export default function JobCreatePage() {
           <p className="mt-4 text-xs text-gray-500">
             Incomplete required address fields show in the notifications bell until they are filled.
           </p>
+          </section>
+
+          <section className="rounded-xl border-2 border-indigo-200 bg-white p-5 shadow-sm">
+            <h2 className="mb-2 text-lg font-semibold">Invoice billing address</h2>
+            <WhyThisSection>{JOB_INVOICE_BILLING_WHY}</WhyThisSection>
+            <p className="mb-4 text-sm text-gray-600">
+              Optional. Used on the customer sales invoice PDF in the <strong>Invoice billing address</strong> block.
+              Collection and delivery always print separately. Leave blank to use the delivery site for billing.
+            </p>
+            <div className="max-w-2xl space-y-3 rounded-xl border border-indigo-200/80 bg-indigo-50/40 p-4">
+              <StructuredSiteAddressFields
+                title="Billing (accounts / head office)"
+                titleClassName="text-sm font-semibold text-indigo-950"
+                wrapperClassName="space-y-3"
+                routeType={routeType}
+                googleMapsApiKey={GOOGLE_MAPS_KEY}
+                organisation={ibOrg}
+                line1={ibLine1}
+                line2={ibLine2}
+                town={ibTown}
+                onOrganisationChange={setIbOrg}
+                onLine1Change={setIbLine1}
+                onLine2Change={setIbLine2}
+                onTownChange={setIbTown}
+                onPlaceResolved={onInvoiceBillingPlace}
+                showAddressRequiredStar={false}
+                addressRequiredWhy={REQ.collectionAddress}
+              />
+              <div>
+                <label className="mb-1 block text-sm font-medium">
+                  Billing postcode
+                  <span className="ml-1 text-xs font-normal text-gray-500">(optional)</span>
+                </label>
+                <input
+                  value={invoiceBillingPostcode}
+                  onChange={(e) => setInvoiceBillingPostcode(e.target.value)}
+                  className="w-full rounded-lg border border-gray-200 px-3 py-2 uppercase"
+                  placeholder="If different from delivery"
+                />
+              </div>
+            </div>
           </section>
 
           <section className="rounded-xl border-2 border-slate-300 bg-white p-5 shadow-sm">

@@ -9,6 +9,9 @@ export const JOB_CARRIER_WHY =
 export const JOB_ADDRESS_WHY =
   "Full addresses, site phone numbers, and postcodes are required for drivers, maps, and ETA alerts. Collection and delivery contact names and emails are optional but help when you need to email the site directly.";
 
+export const JOB_INVOICE_BILLING_WHY =
+  "The customer sales invoice PDF prints collection and delivery in full. The billing block is for accounts / head office: if it differs from the delivery site, enter it here; otherwise leave blank and the invoice uses the delivery address in that block.";
+
 export const JOB_MAP_WHY =
   "Postcodes anchor map pins, distance checks, and UK geocoding. Domestic jobs need full valid UK codes; international legs still need a code (any format, min. 2 characters) so coordinates can be stored consistently.";
 

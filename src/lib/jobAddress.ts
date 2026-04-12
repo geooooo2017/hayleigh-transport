@@ -24,6 +24,8 @@ export function migrateJob(job: Job): Job {
     deliveryContactName: rest.deliveryContactName ?? "",
     deliveryContactPhone: rest.deliveryContactPhone ?? "",
     deliveryContactEmail: rest.deliveryContactEmail ?? "",
+    invoiceBillingAddressLines: rest.invoiceBillingAddressLines ?? "",
+    invoiceBillingPostcode: rest.invoiceBillingPostcode ?? "",
     podSent: rest.podSent ?? "no",
     billable: rest.billable ?? "no",
     hayleighPo: rest.hayleighPo ?? "",
@@ -131,6 +133,17 @@ export function formatAddressBlock(job: Job, side: AddressSide): string {
   if (block.street.trim()) lines.push(block.street.trim());
   if (block.postcode.trim()) lines.push(`Postcode: ${block.postcode.trim()}`);
   return lines.join("\n\n") || "—";
+}
+
+/** Text for sales invoice “billing address” when set on the job. */
+export function formatInvoiceBillingBlock(job: Job): string {
+  const street = (job.invoiceBillingAddressLines ?? "").trim();
+  const postcode = (job.invoiceBillingPostcode ?? "").trim();
+  if (!street && !postcode) return "";
+  const lines: string[] = [];
+  if (street) lines.push(street);
+  if (postcode) lines.push(`Postcode: ${postcode}`);
+  return lines.join("\n\n");
 }
 
 /** Query string for OpenStreetMap geocoding from the job. */

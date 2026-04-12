@@ -55,6 +55,8 @@ function exportCsv(rows: Job[], details: UserCompanyDetails, preparedBy: string 
     "Delivery address lines",
     "Collection postcode",
     "Delivery postcode",
+    "Invoice billing address lines",
+    "Invoice billing postcode",
   ];
   const lines = rows.map((y) => {
     return [
@@ -90,6 +92,8 @@ function exportCsv(rows: Job[], details: UserCompanyDetails, preparedBy: string 
       csvCell(y.deliveryAddressLines),
       csvCell(y.collectionPostcode || ""),
       csvCell(y.deliveryPostcode || ""),
+      csvCell(y.invoiceBillingAddressLines || ""),
+      csvCell(y.invoiceBillingPostcode || ""),
     ].join(",");
   });
   const csv = [...prependBrandedCsvPreamble(headers, details, preparedBy), headers.join(","), ...lines].join("\n");
