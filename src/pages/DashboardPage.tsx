@@ -1,6 +1,17 @@
 import { useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
-import { AlertTriangle, ClipboardList, FileText, MapPin, Plus, TrendingUp, Truck, Users } from "lucide-react";
+import {
+  AlertTriangle,
+  ArrowLeftRight,
+  Calendar,
+  ClipboardList,
+  FileText,
+  MapPin,
+  Plus,
+  TrendingUp,
+  Truck,
+  Users,
+} from "lucide-react";
 import { useLocalStorage } from "../hooks/useLocalStorage";
 import { useJobs } from "../context/JobsContext";
 import type { Customer, Driver, Job, Quotation, Vehicle } from "../types";
@@ -27,6 +38,38 @@ function statusRank(s: Job["status"]): number {
   return 2;
 }
 
+type DashboardMainTab = "operations" | "buySell";
+
+function blendedMarginPct(totalRevenue: number, totalGp: number): number {
+  if (!(totalRevenue > 0)) return 0;
+  return Math.round((totalGp / totalRevenue) * 10000) / 100;
+}
+
+/** Local calendar date from job.collectionDate (YYYY-MM-DD prefix); avoids UTC shift on date-only strings. */
+function parseJobCollectionLocalDate(job: Job): Date | null {
+  const raw = (job.collectionDate ?? "").trim().slice(0, 10);
+  const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(raw);
+  if (!m) return null;
+  const y = parseInt(m[1], 10);
+  const mo = parseInt(m[2], 10) - 1;
+  const d = parseInt(m[3], 10);
+  const dt = new Date(y, mo, d, 12, 0, 0, 0);
+  return Number.isNaN(dt.getTime()) ? null : dt;
+}
+
+function startOfCalendarWeekMondayLocal(ref: Date): Date {
+  const x = new Date(ref.getFullYear(), ref.getMonth(), ref.getDate(), 12, 0, 0, 0);
+  const day = x.getDay();
+  const diff = day === 0 ? -6 : 1 - day;
+  x.setDate(x.getDate() + diff);
+  return new Date(x.getFullYear(), x.getMonth(), x.getDate(), 12, 0, 0, 0);
+}
+
+function endOfCalendarWeekSundayLocal(ref: Date): Date {
+  const s = startOfCalendarWeekMondayLocal(ref);
+  return new Date(s.getFullYear(), s.getMonth(), s.getDate() + 6, 12, 0, 0, 0);
+}
+
 export default function DashboardPage() {
   const [customers] = useLocalStorage<Customer[]>("customers", []);
   const [drivers] = useLocalStorage<Driver[]>("drivers", []);
@@ -34,6 +77,7 @@ export default function DashboardPage() {
   const [quotations] = useLocalStorage<Quotation[]>(QUOTATIONS_STORAGE_KEY, []);
   const [jobs, setJobs] = useJobs();
   const [driverPins, setDriverPins] = useState<FleetDriverPin[]>([]);
+  const [mainTab, setMainTab] = useState<DashboardMainTab>("operations");
 
   const empty = customers.length === 0 && jobs.length === 0;
   const today = new Date();
@@ -51,6 +95,10 @@ export default function DashboardPage() {
   const gpCompleted = completed.reduce((s, j) => s + computeJobGpExVat(j).profit, 0);
   const quotationsApproved = quotations.filter((q) => q.pricesApproved);
   const quotationsValueExVat = quotationsApproved.reduce((s, q) => s + quotationNetExVat(q), 0);
+  const revenueJobsToday = jobsToday.reduce((s, j) => s + resolveInvoiceValueExVat(j), 0);
+  const gpJobsToday = jobsToday.reduce((s, j) => s + computeJobGpExVat(j).profit, 0);
+  const marginJobsToday = blendedMarginPct(revenueJobsToday, gpJobsToday);
+  const marginAllJobs = blendedMarginPct(revenueTotal, gpTotal);
 
   const sortedJobs = useMemo(() => {
     return [...jobs].sort((a, b) => {
@@ -61,6 +109,44 @@ export default function DashboardPage() {
       if (a.status === "completed" && b.status === "completed") return tb - ta;
       return ta - tb;
     });
+  }, [jobs]);
+
+  const jobPeriodCounts = useMemo(() => {
+    const clock = new Date();
+    const todayStr = clock.toDateString();
+    const nowLocal = new Date(clock.getFullYear(), clock.getMonth(), clock.getDate(), 12, 0, 0, 0);
+    const y = nowLocal.getFullYear();
+    const month = nowLocal.getMonth();
+    const quarterIndex = Math.floor(month / 3);
+    const weekStart = startOfCalendarWeekMondayLocal(nowLocal);
+    const weekEnd = endOfCalendarWeekSundayLocal(nowLocal);
+
+    let today = 0;
+    let week = 0;
+    let monthCount = 0;
+    let quarter = 0;
+    let year = 0;
+
+    for (const j of jobs) {
+      if (new Date(j.collectionDate).toDateString() === todayStr) today++;
+      const jd = parseJobCollectionLocalDate(j);
+      if (!jd) continue;
+      if (jd >= weekStart && jd <= weekEnd) week++;
+      if (jd.getFullYear() === y && jd.getMonth() === month) monthCount++;
+      if (jd.getFullYear() === y && Math.floor(jd.getMonth() / 3) === quarterIndex) quarter++;
+      if (jd.getFullYear() === y) year++;
+    }
+
+    return {
+      today,
+      week,
+      month: monthCount,
+      quarter,
+      year,
+      quarterLabel: `Q${quarterIndex + 1} ${y}`,
+      monthLabel: clock.toLocaleDateString("en-GB", { month: "long", year: "numeric" }),
+      weekLabel: `${weekStart.toLocaleDateString("en-GB", { day: "numeric", month: "short" })} – ${weekEnd.toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" })}`,
+    };
   }, [jobs]);
 
   useEffect(() => {
@@ -82,6 +168,39 @@ export default function DashboardPage() {
           available. Driver positions on the map refresh about every {officeDriverPositionsPollDescription()}.
         </p>
       </div>
+
+      {!empty && (
+        <div className="flex flex-wrap gap-2 border-b border-ht-border pb-4" role="tablist" aria-label="Dashboard sections">
+          <button
+            type="button"
+            role="tab"
+            aria-selected={mainTab === "operations"}
+            className={`inline-flex items-center gap-2 rounded-lg px-4 py-2 text-sm font-medium transition-colors ${
+              mainTab === "operations"
+                ? "bg-ht-slate text-white"
+                : "border border-ht-border bg-white text-slate-700 hover:bg-ht-canvas"
+            }`}
+            onClick={() => setMainTab("operations")}
+          >
+            <ClipboardList size={18} aria-hidden />
+            Operations
+          </button>
+          <button
+            type="button"
+            role="tab"
+            aria-selected={mainTab === "buySell"}
+            className={`inline-flex items-center gap-2 rounded-lg px-4 py-2 text-sm font-medium transition-colors ${
+              mainTab === "buySell"
+                ? "bg-ht-slate text-white"
+                : "border border-ht-border bg-white text-slate-700 hover:bg-ht-canvas"
+            }`}
+            onClick={() => setMainTab("buySell")}
+          >
+            <ArrowLeftRight size={18} aria-hidden />
+            Buy vs sell (ex VAT)
+          </button>
+        </div>
+      )}
 
       {empty && (
         <Card className="border-2 border-ht-border bg-gradient-to-br from-ht-canvas to-white p-6">
@@ -161,7 +280,125 @@ export default function DashboardPage() {
         </div>
       )}
 
-      {!empty && (
+      {!empty && mainTab === "buySell" && (
+        <>
+          <p className="text-sm text-slate-600">
+            <strong>Buy</strong> is supplier cost (uploaded lines or job buy price). <strong>Sell</strong> is the main transport
+            line only. <strong>Customer net</strong> is sell + fuel + extras (or your invoiced-value override) — the figure GP
+            and margin use.
+          </p>
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
+            <Card className="p-5">
+              <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Buy (ex VAT) — all jobs</p>
+              <p className="mt-1 font-mono text-2xl font-semibold text-gray-900">£{buyExTotal.toFixed(2)}</p>
+              <p className="mt-2 text-xs text-slate-500">Today: £{buyExToday.toFixed(2)}</p>
+            </Card>
+            <Card className="p-5">
+              <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Sell line (ex VAT) — all jobs</p>
+              <p className="mt-1 font-mono text-2xl font-semibold text-gray-900">£{sellExTotal.toFixed(2)}</p>
+              <p className="mt-2 text-xs text-slate-500">Transport sell only · Today: £{sellExToday.toFixed(2)}</p>
+            </Card>
+            <Card className="p-5">
+              <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Customer net (ex VAT)</p>
+              <p className="mt-1 font-mono text-2xl font-semibold text-emerald-800">£{revenueTotal.toFixed(2)}</p>
+              <p className="mt-2 text-xs text-slate-500">Today: £{revenueJobsToday.toFixed(2)}</p>
+            </Card>
+            <Card className="p-5">
+              <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">GP &amp; blended margin</p>
+              <p className={`mt-1 font-mono text-2xl font-semibold ${gpTotal < 0 ? "text-red-600" : "text-gray-900"}`}>
+                £{gpTotal.toFixed(2)}
+              </p>
+              <p className="mt-2 text-sm text-slate-600">
+                All jobs: <strong>{marginAllJobs.toFixed(1)}%</strong>
+                {jobsToday.length > 0 ? (
+                  <>
+                    {" "}
+                    · Today: <strong>{marginJobsToday.toFixed(1)}%</strong>
+                  </>
+                ) : null}
+              </p>
+            </Card>
+          </div>
+
+          {jobs.length > 0 ? (
+            <Card className="overflow-hidden p-0">
+              <div className="border-b border-ht-border px-5 py-4">
+                <h2 className="text-lg font-semibold text-ht-navy">Per job — cost vs sell</h2>
+                <p className="mt-1 text-sm text-slate-600">
+                  Margin % is gross profit ÷ customer net for that job. Rows where buy exceeds customer net are highlighted.
+                </p>
+              </div>
+              <div className="overflow-x-auto p-4 sm:p-5">
+                <table className="w-full min-w-[1100px] text-sm">
+                  <thead>
+                    <tr className="border-b border-ht-border text-left text-xs font-medium uppercase tracking-wide text-slate-600">
+                      <th className="px-3 py-2">Job</th>
+                      <th className="px-3 py-2">Customer</th>
+                      <th className="px-3 py-2">Status</th>
+                      <th className="px-3 py-2 text-right">Buy (ex VAT)</th>
+                      <th className="px-3 py-2 text-right">Sell (ex VAT)</th>
+                      <th className="px-3 py-2 text-right">Fuel + extras</th>
+                      <th className="px-3 py-2 text-right">Customer net (ex VAT)</th>
+                      <th className="px-3 py-2 text-right">GP (ex VAT)</th>
+                      <th className="px-3 py-2 text-right">Margin %</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {sortedJobs.map((p) => {
+                      const buy = effectiveSupplierCostExVat(p);
+                      const sellLine = Number(p.sellPrice) || 0;
+                      const fuel = Number(p.fuelSurcharge) || 0;
+                      const extra = Number(p.extraCharges) || 0;
+                      const fuelExtra = fuel + extra;
+                      const net = resolveInvoiceValueExVat(p);
+                      const gpRow = computeJobGpExVat(p);
+                      const lossRow = buy > net + 0.005;
+                      const gpCls =
+                        gpRow.profit < 0 ? "text-red-600" : gpRow.profit < 50 ? "text-orange-600" : "text-green-700";
+                      return (
+                        <tr
+                          key={p.id}
+                          className={`border-b border-ht-border/60 hover:bg-ht-canvas/50 ${lossRow ? "bg-red-50/70" : ""}`}
+                        >
+                          <td className="px-3 py-2.5 font-medium">
+                            <Link to={platformPath(`/jobs/${p.id}`)} className="text-ht-slate hover:underline">
+                              {p.jobNumber}
+                            </Link>
+                          </td>
+                          <td className="max-w-[140px] truncate px-3 py-2.5 text-gray-700" title={p.customerName}>
+                            {p.customerName}
+                          </td>
+                          <td className="whitespace-nowrap px-3 py-2.5 text-gray-600">
+                            {p.status === "completed" ? "Completed" : p.status === "in-progress" ? "In progress" : "Scheduled"}
+                          </td>
+                          <td className="px-3 py-2.5 text-right font-mono">£{buy.toFixed(2)}</td>
+                          <td className="px-3 py-2.5 text-right font-mono">£{sellLine.toFixed(2)}</td>
+                          <td className="px-3 py-2.5 text-right font-mono text-slate-700">£{fuelExtra.toFixed(2)}</td>
+                          <td className="px-3 py-2.5 text-right font-mono font-medium text-emerald-900">£{net.toFixed(2)}</td>
+                          <td className={`px-3 py-2.5 text-right font-mono font-semibold ${gpCls}`}>£{gpRow.profit.toFixed(2)}</td>
+                          <td className={`px-3 py-2.5 text-right font-mono font-medium ${gpCls}`}>{gpRow.margin.toFixed(1)}%</td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            </Card>
+          ) : (
+            <Card className="py-10 text-center">
+              <ClipboardList size={44} className="mx-auto mb-3 text-gray-300" />
+              <p className="text-sm text-gray-600">No jobs yet — create a job to compare buy and sell here.</p>
+              <Link to={platformPath("/jobs/create")} className="mt-4 inline-block">
+                <Btn className="gap-2">
+                  <Plus size={16} aria-hidden /> Create job
+                </Btn>
+              </Link>
+            </Card>
+          )}
+        </>
+      )}
+
+      {!empty && mainTab === "operations" && (
         <>
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4 xl:gap-6">
             <Card>
@@ -284,6 +521,47 @@ export default function DashboardPage() {
           </div>
 
           <Card>
+            <div className="flex flex-col gap-1 border-b border-ht-border px-6 pb-3 pt-6 sm:flex-row sm:items-start sm:justify-between">
+              <div className="flex items-start gap-3">
+                <Calendar className="mt-0.5 shrink-0 text-ht-slate" size={22} aria-hidden />
+                <div>
+                  <h2 className="text-lg font-semibold text-ht-navy">Jobs by collection date</h2>
+                  <p className="mt-1 text-sm text-slate-600">
+                    Counts use each job&apos;s <strong>collection date</strong> in your local calendar. Week runs{" "}
+                    <strong>Monday–Sunday</strong>. Quarter is calendar Jan–Mar, Apr–Jun, Jul–Sep, Oct–Dec.
+                  </p>
+                  <p className="mt-2 text-xs text-slate-500">
+                    This week: {jobPeriodCounts.weekLabel} · This month: {jobPeriodCounts.monthLabel} ·{" "}
+                    {jobPeriodCounts.quarterLabel}
+                  </p>
+                </div>
+              </div>
+            </div>
+            <div className="grid grid-cols-2 gap-4 px-6 py-5 sm:grid-cols-3 lg:grid-cols-5">
+              <div className="rounded-lg border border-ht-border bg-ht-canvas/40 p-4 text-center">
+                <div className="text-xs font-medium uppercase tracking-wide text-slate-500">Today</div>
+                <div className="mt-1 text-3xl font-semibold text-gray-900">{jobPeriodCounts.today}</div>
+              </div>
+              <div className="rounded-lg border border-ht-border bg-ht-canvas/40 p-4 text-center">
+                <div className="text-xs font-medium uppercase tracking-wide text-slate-500">This week</div>
+                <div className="mt-1 text-3xl font-semibold text-gray-900">{jobPeriodCounts.week}</div>
+              </div>
+              <div className="rounded-lg border border-ht-border bg-ht-canvas/40 p-4 text-center">
+                <div className="text-xs font-medium uppercase tracking-wide text-slate-500">This month</div>
+                <div className="mt-1 text-3xl font-semibold text-gray-900">{jobPeriodCounts.month}</div>
+              </div>
+              <div className="rounded-lg border border-ht-border bg-ht-canvas/40 p-4 text-center">
+                <div className="text-xs font-medium uppercase tracking-wide text-slate-500">This quarter</div>
+                <div className="mt-1 text-3xl font-semibold text-gray-900">{jobPeriodCounts.quarter}</div>
+              </div>
+              <div className="rounded-lg border border-ht-border bg-ht-canvas/40 p-4 text-center">
+                <div className="text-xs font-medium uppercase tracking-wide text-slate-500">This year</div>
+                <div className="mt-1 text-3xl font-semibold text-gray-900">{jobPeriodCounts.year}</div>
+              </div>
+            </div>
+          </Card>
+
+          <Card>
             <div className="flex flex-col gap-3 border-b border-ht-border px-6 pb-2 pt-6 sm:flex-row sm:items-center sm:justify-between">
               <div>
                 <h2 className="text-sm font-medium text-slate-600">Quotations</h2>
@@ -367,7 +645,7 @@ export default function DashboardPage() {
                   </div>
                 </div>
                 <div className="overflow-x-auto p-6 pt-4">
-                  <table className="w-full min-w-[1240px]">
+                  <table className="w-full min-w-[1320px]">
                     <thead>
                       <tr className="border-b border-ht-border">
                         <th className="px-3 py-3 text-left text-sm font-medium text-gray-600">Job</th>
@@ -382,6 +660,7 @@ export default function DashboardPage() {
                         <th className="px-3 py-3 text-right text-sm font-medium text-gray-600">Buy ex VAT</th>
                         <th className="px-3 py-3 text-right text-sm font-medium text-gray-600">Net ex VAT</th>
                         <th className="px-3 py-3 text-right text-sm font-medium text-gray-600">GP</th>
+                        <th className="px-3 py-3 text-right text-sm font-medium text-gray-600">Margin %</th>
                       </tr>
                     </thead>
                     <tbody>
@@ -389,7 +668,8 @@ export default function DashboardPage() {
                         const sellEx = Number(p.sellPrice) || 0;
                         const net = resolveInvoiceValueExVat(p);
                         const sc = effectiveSupplierCostExVat(p);
-                        const gpv = computeJobGpExVat(p).profit;
+                        const gpInfo = computeJobGpExVat(p);
+                        const gpv = gpInfo.profit;
                         const gpCls =
                           gpv < 0 ? "text-red-600" : gpv < 50 ? "text-orange-600" : "text-green-700";
                         return (
@@ -457,6 +737,9 @@ export default function DashboardPage() {
                           </td>
                           <td className={`whitespace-nowrap px-3 py-3 text-right font-mono text-sm font-semibold ${gpCls}`}>
                             £{gpv.toFixed(2)}
+                          </td>
+                          <td className={`whitespace-nowrap px-3 py-3 text-right font-mono text-sm font-medium ${gpCls}`}>
+                            {gpInfo.margin.toFixed(1)}%
                           </td>
                         </tr>
                         );
