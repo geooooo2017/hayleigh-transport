@@ -239,9 +239,9 @@ export function Layout() {
       )}
 
       <main
-        className={`min-h-screen lg:ml-64 ${syncMode === "cloud" ? "pt-[7rem]" : "pt-16"}`}
+        className={`min-h-screen lg:ml-64 ${syncMode === "cloud" ? "pt-[7rem]" : "pt-16"} pb-[max(1rem,env(safe-area-inset-bottom,0px))]`}
       >
-        <div className="p-4 lg:p-6">
+        <div className="p-3 sm:p-4 lg:p-6">
           <RouteErrorBoundary key={pathname}>
             <Outlet />
           </RouteErrorBoundary>

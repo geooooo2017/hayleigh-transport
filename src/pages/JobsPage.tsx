@@ -229,8 +229,8 @@ export default function JobsPage() {
             Job list follows the Hayleigh spreadsheet flow (dates, from, carrier, money ex VAT, billable, POD, invoices,
             supplier payment). Scroll horizontally if needed.
           </p>
-          <div className="overflow-x-auto border border-gray-300 bg-white">
-            <table className="w-full border-collapse text-sm">
+          <div className="-mx-1 overflow-x-auto border border-gray-300 bg-white px-1 touch-pan-x sm:mx-0 sm:px-0 [-webkit-overflow-scrolling:touch]">
+            <table className="w-full min-w-[920px] border-collapse text-sm">
               <thead>
                 <tr className="border-b border-gray-300 bg-gray-100">
                   <th className="sticky left-0 z-20 min-w-[100px] border-r border-gray-300 bg-gray-100 px-2 py-2.5 text-left text-xs font-semibold text-gray-700">

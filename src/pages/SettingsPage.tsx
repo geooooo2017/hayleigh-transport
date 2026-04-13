@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { notifyError, notifySuccess } from "../lib/platformNotify";
-import { AlertTriangle, Archive, Building2, KeyRound, RotateCcw, Trash2 } from "lucide-react";
+import { AlertTriangle, Archive, Building2, KeyRound, RefreshCw, RotateCcw, Trash2 } from "lucide-react";
 import { MissingFieldLegend, ReqStar, WhyThisSection } from "../components/FormGuidance";
 import { Btn, Card } from "../components/Layout";
 import { REQ, SETTINGS_COMPANY_WHY, SETTINGS_PASSWORD_WHY } from "../lib/fieldRequirementCopy";
@@ -18,6 +18,11 @@ import {
 import { TechnicalSupportLogCard } from "../components/TechnicalSupportLogCard";
 import { PlatformAppearanceCard } from "../components/PlatformAppearanceCard";
 import { OneDriveBackupCard } from "../components/OneDriveBackupCard";
+import {
+  clearSiteCachesAndHardReload,
+  formatAppBuildForUser,
+  getAppBuildTimeIso,
+} from "../lib/appUpdateInfo";
 
 export default function SettingsPage() {
   const { user, changePassword } = useAuth();
@@ -101,6 +106,34 @@ export default function SettingsPage() {
       </div>
 
       <MissingFieldLegend />
+
+      <Card className="space-y-3 p-6">
+        <h2 className="flex items-center gap-2 font-semibold text-gray-900">
+          <RefreshCw className="h-5 w-5 shrink-0 text-ht-slate" aria-hidden />
+          Website version &amp; cache
+        </h2>
+        <p className="text-sm text-gray-600">
+          This browser is running the app build from{" "}
+          <strong className="text-gray-900">{formatAppBuildForUser(getAppBuildTimeIso())}</strong> (your local date and
+          time). That is when the <em>website code</em> was produced — not when a specific job was last edited. Shared
+          jobs still load from the cloud (or this device if you are offline without Supabase).
+        </p>
+        <p className="text-sm text-gray-600">
+          If something looks older than a colleague sees, or the page misbehaves after we ship an update, clear the site
+          cache below and reload. That does <strong>not</strong> delete your saved jobs or sign-in.
+        </p>
+        <Btn
+          type="button"
+          variant="outline"
+          className="gap-2"
+          onClick={() => {
+            void clearSiteCachesAndHardReload();
+          }}
+        >
+          <RefreshCw size={16} aria-hidden />
+          Clear site cache &amp; reload
+        </Btn>
+      </Card>
 
       <PlatformAppearanceCard />
 

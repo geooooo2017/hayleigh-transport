@@ -3,6 +3,7 @@ import {
   DndContext,
   DragEndEvent,
   PointerSensor,
+  TouchSensor,
   useDraggable,
   useDroppable,
   useSensor,
@@ -135,7 +136,10 @@ export default function JobBoardPage() {
   const [drivers] = useLocalStorage("drivers", [] as { id: number; name: string }[]);
   const [vehicles] = useLocalStorage("vehicles", [] as { id: number; name: string; registration: string }[]);
 
-  const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 8 } }));
+  const sensors = useSensors(
+    useSensor(PointerSensor, { activationConstraint: { distance: 8 } }),
+    useSensor(TouchSensor, { activationConstraint: { delay: 200, tolerance: 6 } })
+  );
 
   const unassigned = jobs.filter((j) => !j.scheduledDay);
   const byDay = (day: string) => jobs.filter((j) => j.scheduledDay === day);
